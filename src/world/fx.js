@@ -1,4 +1,4 @@
-import { THREE, box, mat } from './kit.js';
+import { THREE, box, mat, drawnTexture } from './kit.js';
 import { G } from '../engine/stage.js';
 import { rng } from '../engine/tween.js';
 import { puffTex } from './city.js';
@@ -49,15 +49,13 @@ function flakes(p, opts) {
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const c = document.createElement('canvas');
-  c.width = c.height = 16;
-  const ctx = c.getContext('2d');
-  const gr = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
-  gr.addColorStop(0, 'rgba(255,255,255,1)');
-  gr.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = gr;
-  ctx.fillRect(0, 0, 16, 16);
-  const tex = new THREE.CanvasTexture(c);
+  const tex = drawnTexture(16, 16, (ctx) => {
+    const gr = ctx.createRadialGradient(8, 8, 0, 8, 8, 8);
+    gr.addColorStop(0, 'rgba(255,255,255,1)');
+    gr.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = gr;
+    ctx.fillRect(0, 0, 16, 16);
+  });
   const m = new THREE.PointsMaterial({ size: opts.size, map: tex, color: opts.color, transparent: true, depthWrite: false, sizeAttenuation: false, blending: opts.additive ? THREE.AdditiveBlending : THREE.NormalBlending });
   const pts = new THREE.Points(geo, m);
   pts.frustumCulled = false;

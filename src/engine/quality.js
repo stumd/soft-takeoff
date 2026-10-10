@@ -82,16 +82,21 @@ const carried = readWindowName();
 function decide() {
   const params = new URLSearchParams(location.search);
   const forced = params.get('quality');
-  const stored = carried.tier || read(local, KEY);
+  const stored = read(local, KEY);
   const probe = probeWebGL2();
   let tier;
   let reason;
-  if (forced && TIERS.includes(forced)) {
+  if (carried.tier && TIERS.includes(carried.tier)) {
+    // A choice made moments ago (Graphics buttons, or a step-down after a
+    // graphics failure) beats everything, including a ?quality= link.
+    tier = carried.tier;
+    reason = carried.why || 'chosen';
+  } else if (forced && TIERS.includes(forced)) {
     tier = forced;
     reason = 'url';
   } else if (stored && TIERS.includes(stored)) {
     tier = stored;
-    reason = 'chosen';
+    reason = read(local, KEY + '-why') || 'chosen';
   } else {
     tier = looksMobile() ? 'lite' : 'full';
     reason = 'auto';
@@ -116,16 +121,30 @@ export const QUALITY = {
   losses: Number(read(session, LOSS_KEY + d.tier) || 0),
 };
 
-// Remember a tier for the next visit, without reloading.
-export function rememberTier(tier) {
+// Remember a tier for the next visit, without reloading. Also kept in
+// window.name so it survives a reload of this frame when storage is blocked.
+export function rememberTier(tier, why = 'after-loss') {
   write(local, KEY, tier);
+  write(local, KEY + '-why', why);
+  writeWindowName({ tier, why });
 }
 
 // Persist a tier and reload (used by the Graphics buttons in Help).
 export function switchTier(tier, resume) {
   write(local, KEY, tier);
-  if (resume) write(session, RESUME_KEY, JSON.stringify(resume));
-  writeWindowName({ tier, note: resume && resume.note });
+  write(local, KEY + '-why', 'chosen');
+  const r = { ...(resume || {}), tier };
+  write(session, RESUME_KEY, JSON.stringify(r));
+  writeWindowName({ tier, why: 'chosen', note: r.note, wanted: tier });
+  // Drop a ?quality= override so the new choice can take effect.
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has('quality')) {
+      u.searchParams.delete('quality');
+      location.replace(u.href);
+      return;
+    }
+  } catch (e) { /* fall back to reload */ }
   location.reload();
 }
 
@@ -144,7 +163,7 @@ export function takeResume() {
   write(session, RESUME_KEY, null);
   let v = null;
   try { v = raw ? JSON.parse(raw) : null; } catch (e) { v = null; }
-  if (!v && carried.note) v = { note: carried.note };
+  if (!v && (carried.note || carried.wanted)) v = { note: carried.note, tier: carried.wanted };
   return v;
 }
 

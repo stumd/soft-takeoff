@@ -1,4 +1,4 @@
-import { THREE, mat } from './kit.js';
+import { THREE, mat, drawnTexture } from './kit.js';
 import { G } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
@@ -9,16 +9,14 @@ import { puffTex } from './city.js';
 
 function dotTex() {
   if (dotTex.t) return dotTex.t;
-  const c = document.createElement('canvas');
-  c.width = c.height = 32;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
-  g.addColorStop(0, 'rgba(255,255,255,1)');
-  g.addColorStop(0.3, 'rgba(255,255,255,0.8)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 32, 32);
-  dotTex.t = new THREE.CanvasTexture(c);
+  dotTex.t = drawnTexture(32, 32, (ctx) => {
+    const g = ctx.createRadialGradient(16, 16, 0, 16, 16, 16);
+    g.addColorStop(0, 'rgba(255,255,255,1)');
+    g.addColorStop(0.3, 'rgba(255,255,255,0.8)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 32, 32);
+  });
   dotTex.t.userData.cached = true;
   return dotTex.t;
 }

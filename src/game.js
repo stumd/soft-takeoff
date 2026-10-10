@@ -8,6 +8,7 @@ import { tweens, tween, wait, Ease, clamp } from './engine/tween.js';
 import { G } from './engine/stage.js';
 import { cloneEnv } from './engine/env.js';
 import { QUALITY, switchTier, rememberTier, noteLoss, TIER_LABELS } from './engine/quality.js';
+import { repaintAllTextures } from './world/kit.js';
 import { NullStage, NullWorld } from './engine/nullstage.js';
 
 const $ = (id) => document.getElementById(id);
@@ -141,28 +142,33 @@ export class Game {
       this.dots.push(d);
     });
     this._layoutTimeline();
+    const track = document.querySelector('.tl-track');
+    if (window.ResizeObserver) new ResizeObserver(() => this._layoutTimeline()).observe(track);
     window.addEventListener('resize', () => this._layoutTimeline());
   }
 
   _layoutTimeline() {
     const track = document.querySelector('.tl-track');
-    const w = track.clientWidth || 600;
-    let lastPx = -100;
-    SCENES.forEach((sc, i) => {
-      if (i === SCENES.length - 1) return;
-      const x = (parseDate(sc.date).getTime() - TL_START) / (TL_END - TL_START);
-      let px = x * w;
-      // The last visits are days apart; nudge them just enough to stay clickable.
-      if (px < lastPx + 9) px = lastPx + 9;
-      lastPx = px;
-      this.dots[i].style.left = px + 'px';
-    });
+    const w = track.clientWidth;
+    if (!w) return; // hidden; laid out again when shown (ResizeObserver)
+    const n = SCENES.length - 1;
+    const gap = Math.min(9, w / (n * 1.5));
+    const px = SCENES.slice(0, n).map((sc) => ((parseDate(sc.date).getTime() - TL_START) / (TL_END - TL_START)) * w);
+    // The last visits are days apart: push them apart just enough to stay
+    // clickable, without letting any run off the end of the track.
+    for (let i = 1; i < n; i++) px[i] = Math.max(px[i], px[i - 1] + gap);
+    px[n - 1] = Math.min(px[n - 1], w - 4);
+    for (let i = n - 2; i >= 0; i--) px[i] = Math.min(px[i], px[i + 1] - gap);
+    for (let i = 0; i < n; i++) this.dots[i].style.left = Math.max(0, px[i]) + 'px';
   }
 
   _updateTimeline() {
     this.dots.forEach((d, i) => {
       d.classList.toggle('future', i > this.furthest);
       d.classList.toggle('current', i === this.index);
+      d.tabIndex = i > this.furthest ? -1 : 0;
+      if (i > this.furthest) d.setAttribute('aria-hidden', 'true');
+      else d.removeAttribute('aria-hidden');
     });
     document.querySelector('.tl-end').classList.toggle('unseen', this.furthest < SCENES.length - 1);
   }
@@ -190,13 +196,19 @@ export class Game {
     const row = $('gfx-options');
     if (!row) return;
     row.innerHTML = '';
+    const no3D = !QUALITY.probe.ok;
     for (const t of ['full', 'lite', 'text']) {
       const b = document.createElement('button');
       b.textContent = TIER_LABELS[t];
       b.className = 'gfx' + (QUALITY.tier === t ? ' on' : '');
       b.setAttribute('aria-pressed', QUALITY.tier === t ? 'true' : 'false');
+      if (no3D && t !== 'text') {
+        b.disabled = true;
+        b.title = '3D isn’t available in this browser right now';
+      }
       b.onclick = () => {
-        if (QUALITY.tier === t) return;
+        if (QUALITY.tier === t || b.disabled) return;
+        this._persist();
         switchTier(t, { note: `Graphics set to ${TIER_LABELS[t]}.` });
       };
       row.appendChild(b);
@@ -210,6 +222,7 @@ export class Game {
       'not-restored': 'the graphics stopped and didn’t come back',
       'lost-twice': 'the graphics stopped twice',
       blocked: 'the browser paused 3D after the graphics stopped',
+      'after-loss': 'lighter, after the graphics stopped last time',
     }[QUALITY.reason] || '';
     const bits = [`Now: ${TIER_LABELS[QUALITY.tier]}${why ? ` (${why})` : ''}.`];
     if (QUALITY.gpu) bits.push(`GPU: ${QUALITY.gpu}.`);
@@ -251,12 +264,32 @@ export class Game {
   _contextLost() {
     if (QUALITY.text) return;
     document.body.classList.add('gl-lost');
-    const n = noteLoss();
-    // Whatever happens next, start lighter next time.
-    if (QUALITY.full) rememberTier('lite');
     clearTimeout(this._lossTimer);
+    // Phones drop GPU contexts when you switch apps; that's not a failure of
+    // ours. Give those their restore window once the page is visible again,
+    // and don't count them against this device.
+    if (document.hidden) {
+      this._lossWhileHidden = true;
+      if (!this._onVisible) {
+        this._onVisible = () => {
+          if (document.hidden) return;
+          document.removeEventListener('visibilitychange', this._onVisible);
+          this._onVisible = null;
+          if (this.stage.contextLost) this._startRestoreDeadline();
+        };
+        document.addEventListener('visibilitychange', this._onVisible);
+      }
+      return;
+    }
+    this._lossWhileHidden = false;
+    const n = noteLoss();
     if (n >= 2) return this.switchToText('lost-twice');
-    this.toast('The graphics stopped. Restarting them…', 0);
+    if (this.state !== 'title') this.toast('The graphics stopped. Restarting them…', 0);
+    this._startRestoreDeadline();
+  }
+
+  _startRestoreDeadline() {
+    clearTimeout(this._lossTimer);
     this._lossTimer = setTimeout(() => this.switchToText('not-restored'), 3500);
   }
 
@@ -264,9 +297,26 @@ export class Game {
     if (QUALITY.text) return;
     clearTimeout(this._lossTimer);
     this._lossTimer = null;
+    if (this._onVisible) {
+      document.removeEventListener('visibilitychange', this._onVisible);
+      this._onVisible = null;
+    }
+    // A GPU crash can also wipe 2D canvases: repaint every texture.
+    repaintAllTextures();
+    if (this._lossWhileHidden) {
+      // Just an app switch: carry on as before.
+      this._lossWhileHidden = false;
+      document.body.classList.remove('gl-lost');
+      this.stage.warmup && this.stage.warmup(3000);
+      return;
+    }
+    // A real failure: ask much less of the GPU from now on, and next time.
     this.stage.lighten();
+    if (QUALITY.full) rememberTier('lite');
     document.body.classList.remove('gl-lost');
-    this.toast('Graphics restored, with lighter settings.', 3000);
+    // Recompile behind a fade instead of in one blocking frame.
+    this.stage.warmup && this.stage.warmup(3000);
+    if (this.state !== 'title') this.toast('Graphics restored, with lighter settings.', 3000);
   }
 
   // Swap the 3D stage for the text-only one without leaving the current moment.
@@ -274,6 +324,10 @@ export class Game {
     if (QUALITY.text) return;
     const prev = QUALITY.tier;
     clearTimeout(this._lossTimer);
+    if (this._onVisible) {
+      document.removeEventListener('visibilitychange', this._onVisible);
+      this._onVisible = null;
+    }
     const old = this.stage;
     const oldWorld = this.world;
     old.stop && old.stop();
@@ -302,16 +356,16 @@ export class Game {
     if (this.scene && this.state !== 'title') {
       nw.setHotspots(this.scene.hotspots);
       this._buildMarkers();
-      if (this.state === 'choose') this.enterChoose(true);
+      // Keep the player's place in the answer step, including an open panel.
+      if (this.state === 'choose') this._decorateChoose();
     }
     ns.start();
     try { old.renderer.dispose(); } catch (e) { /* already gone */ }
     // Next visit: one step lighter than whatever just failed.
     rememberTier(prev === 'full' ? 'lite' : 'text');
     this._buildGraphicsSettings();
-    const note = 'Your device’s graphics stopped, so the story carries on without the 3D diorama. You can try 3D again under ? → Graphics.';
-    this.toast(note, 9000);
-    this.showNote(note);
+    this.showNote('Your device’s graphics stopped, so the story is now told without the 3D diorama. You can try 3D again under ? → Graphics.');
+    if (this.state !== 'title') this.toast('3D stopped, so the story carries on in text.', 5000);
   }
 
   showTitleWorld() {
@@ -504,6 +558,7 @@ export class Game {
     const p = $('panel');
     p.classList.add('open');
     p.setAttribute('aria-hidden', 'false');
+    p.inert = false;
     p.scrollTop = 0;
     document.body.classList.add('panel-open');
     this.panelOpen = true;
@@ -518,6 +573,7 @@ export class Game {
     if (p.contains(document.activeElement)) document.activeElement.blur();
     p.classList.remove('open');
     p.setAttribute('aria-hidden', 'true');
+    p.inert = true;
     document.body.classList.remove('panel-open');
     this.panelOpen = false;
     this.stage.cam.shiftT = 0;
@@ -758,15 +814,19 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ the answer
-  enterChoose(force) {
-    if (this.state === 'choose' && !force) return;
+  enterChoose() {
+    if (this.state === 'choose') return;
     this.closePanel();
     this.state = 'choose';
+    this._decorateChoose();
+  }
+
+  _decorateChoose() {
     const banner = $('banner');
     banner.textContent = 'What would you like to keep? Choose anything.';
     banner.classList.remove('hidden');
     $('bottom').classList.add('hidden');
-    for (const [id, m] of this.markers) {
+    for (const m of this.markers.values()) {
       m.classList.add('keep');
       m.classList.add('show-seen');
     }

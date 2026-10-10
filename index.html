@@ -31,6 +31,11 @@
     <button id="btn-help" class="tool" aria-label="How to play" title="How to play (H)">?</button>
   </div>
 
+  <section id="roomlist" class="hidden" aria-label="Things to look at">
+    <h2 id="rl-title"></h2>
+    <div id="rl-items"></div>
+  </section>
+
   <footer id="bottom" class="hidden">
     <div id="timeline" aria-label="Timeline">
       <div class="tl-track">
@@ -47,16 +52,11 @@
     </div>
   </footer>
 
-  <section id="roomlist" class="hidden" aria-label="Things to look at">
-    <h2 id="rl-title"></h2>
-    <div id="rl-items"></div>
-  </section>
-
   <div id="banner" class="hidden" role="status"></div>
   <div id="toast" role="status" aria-live="polite"></div>
   <div id="subtitle" aria-live="polite"></div>
 
-  <aside id="panel" aria-hidden="true" aria-labelledby="panel-title">
+  <aside id="panel" aria-hidden="true" aria-labelledby="panel-title" inert>
     <button id="panel-close" class="panel-close" aria-label="Close">×</button>
     <div class="panel-kicker" id="panel-kicker"></div>
     <h2 id="panel-title"></h2>
@@ -91,8 +91,9 @@
     <div class="help-card">
       <h2 id="help-title">How to play</h2>
       <ul>
-        <li><b>Look closer.</b> Click glowing markers, or anything that lights up under your cursor.</li>
-        <li><b>Move around.</b> Drag to pan, scroll or pinch to zoom, double-click to reset.</li>
+        <li class="only-3d"><b>Look closer.</b> Click glowing markers, or anything that lights up under your cursor.</li>
+        <li class="only-3d"><b>Move around.</b> Drag to pan, scroll or pinch to zoom, double-click to reset.</li>
+        <li class="only-text"><b>Look closer.</b> Tap anything in the list to read about it.</li>
         <li><b>Let time pass</b> when you’re ready. You don’t have to see everything, but things are only here once.</li>
         <li>Visited moments stay on the timeline. Click a dot to go back.</li>
         <li>Keys: <kbd>Space</kbd> let time pass &middot; <kbd>Esc</kbd> close &middot; <kbd>M</kbd> sound</li>

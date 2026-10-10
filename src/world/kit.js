@@ -214,15 +214,44 @@ export function at(obj, x = 0, y = 0, z = 0, ry = 0) {
 // Canvas textures
 
 const texCache = new Map();
+const drawn = new Set();
 
-export function canvasTex(key, w, h, draw, opts = {}) {
-  if (texCache.has(key)) return texCache.get(key);
+// Every procedural texture is drawn through here. The canvases ask to stay in
+// CPU memory (willReadFrequently), because a GPU-process crash otherwise wipes
+// accelerated 2D canvases too, and a "restored" diorama would come back black.
+// We also keep each draw function so everything can be repainted after a loss.
+export function drawnTexture(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  const ctx = c.getContext('2d');
+  const ctx = c.getContext('2d', { willReadFrequently: true });
   draw(ctx, w, h);
-  const t = markCached(new THREE.CanvasTexture(c));
+  const t = new THREE.CanvasTexture(c);
+  const entry = { ctx, draw, t, w, h };
+  drawn.add(entry);
+  t.addEventListener('dispose', () => drawn.delete(entry));
+  c.addEventListener('contextrestored', () => repaint(entry));
+  return t;
+}
+
+function repaint(e) {
+  e.ctx.setTransform(1, 0, 0, 1, 0, 0);
+  e.ctx.globalAlpha = 1;
+  e.ctx.globalCompositeOperation = 'source-over';
+  e.ctx.clearRect(0, 0, e.w, e.h);
+  e.draw(e.ctx, e.w, e.h);
+  e.t.needsUpdate = true;
+}
+
+export function repaintAllTextures() {
+  for (const e of drawn) {
+    try { repaint(e); } catch (err) { /* keep going */ }
+  }
+}
+
+export function canvasTex(key, w, h, draw, opts = {}) {
+  if (texCache.has(key)) return texCache.get(key);
+  const t = markCached(drawnTexture(w, h, draw));
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = QUALITY.lite ? 1 : 4;
   if (opts.repeat) {

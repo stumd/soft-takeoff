@@ -236,6 +236,9 @@ export class Stage {
     this.renderer.toneMappingExposure = e.exposure;
 
     mistUniforms.uFogFloor.value = e.haze ?? (0.42 - e.night * 0.2);
+    // Pale skies need darker glass behind overlay text.
+    const m = e.skyMid;
+    document.body.classList.toggle('sky-light', 0.2126 * m.r + 0.7152 * m.g + 0.0722 * m.b > 0.42);
     G.night = e.night;
     G.interior = e.interior;
   }
@@ -361,7 +364,7 @@ export class Stage {
   // Drop the resolution a little on devices that can't keep up.
   _adapt(raw) {
     const a = (this._adaptState ||= { t: 0, frames: 0, settled: false });
-    if (a.settled || document.hidden) return;
+    if (a.settled || document.hidden || this.hold) return;
     a.t += raw;
     a.frames++;
     if (a.t < 2.5) return;
@@ -377,6 +380,8 @@ export class Stage {
       this.sun.shadow.mapSize.set(n, n);
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
+      // Redraw the (new, smaller) shadow map on the very next frame.
+      this.renderer.shadowMap.needsUpdate = true;
     } else {
       a.settled = fps >= 42 || r <= 1;
       if (a.settled && fps < 14 && this.onSlow) this.onSlow(fps);
@@ -412,10 +417,11 @@ export class Stage {
     const sm = this.sun.shadow;
     if (sm.mapSize.x > 1024) {
       sm.mapSize.set(1024, 1024);
-      sm.map?.dispose();
+      // The old target belonged to the lost context; just let it go.
       sm.map = null;
     }
     this.renderer.shadowMap.autoUpdate = false;
+    this.renderer.shadowMap.needsUpdate = true;
     this._shadowEvery = 4;
   }
 
@@ -436,7 +442,15 @@ export class Stage {
       this._updateCamera(dt);
       if (this.onLate) this.onLate(dt);
       if (!this.renderer.shadowMap.autoUpdate && this._frame++ % (this._shadowEvery || 3) === 0) this.renderer.shadowMap.needsUpdate = true;
-      if (!this.hold && !this.contextLost) this.renderer.render(this.scene, this.camera);
+      if (!this.hold && !this.contextLost) {
+        // The context can be gone a frame before the event arrives.
+        if (this.renderer.getContext().isContextLost()) {
+          this.contextLost = true;
+          document.body.classList.add('gl-lost');
+        } else {
+          this.renderer.render(this.scene, this.camera);
+        }
+      }
     };
     loop();
   }

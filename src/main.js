@@ -1,4 +1,4 @@
-import { QUALITY, takeResume } from './engine/quality.js';
+import { QUALITY, takeResume, TIER_LABELS } from './engine/quality.js';
 import { Stage } from './engine/stage.js';
 import { NullStage, NullWorld } from './engine/nullstage.js';
 import { World } from './world/world.js';
@@ -30,7 +30,11 @@ if (QUALITY.text) {
 
 const game = new Game(stage, world);
 const resume = takeResume();
-if (resume && resume.note) game.showNote(resume.note);
+if (resume && resume.tier && resume.tier !== QUALITY.tier) {
+  game.showNote(`Couldn’t switch to ${TIER_LABELS[resume.tier]} graphics here: 3D isn’t available in this browser right now.`);
+} else if (resume && resume.note) {
+  game.showNote(resume.note);
+}
 
 const params = new URLSearchParams(location.search);
 const debugScene = params.get('scene');
@@ -51,9 +55,10 @@ if (debugScene != null) {
   game.showTitleWorld();
 }
 
-stage.start();
-// Compile shaders up front (behind a fade) rather than in the first frames.
+// Compile shaders up front (behind a fade) rather than in the first frame.
+// warmup() sets `hold` synchronously, so start()'s first frame doesn't render.
 if (stage.warmup) stage.warmup();
+stage.start();
 window.__game = game;
 window.__stage = stage;
 window.__world = world;

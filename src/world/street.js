@@ -1,4 +1,4 @@
-import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane, textTex, stdMat } from './kit.js';
+import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane, textTex, stdMat, drawnTexture } from './kit.js';
 import { brickTex } from './textures.js';
 import { robot, person } from './people.js';
 import { G } from '../engine/stage.js';
@@ -150,16 +150,14 @@ export function lampPosts(p = {}) {
 
 function poolTex() {
   if (poolTex.t) return poolTex.t;
-  const c = document.createElement('canvas');
-  c.width = c.height = 128;
-  const ctx = c.getContext('2d');
-  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  g.addColorStop(0, 'rgba(255,255,255,0.9)');
-  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
-  g.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = g;
-  ctx.fillRect(0, 0, 128, 128);
-  poolTex.t = new THREE.CanvasTexture(c);
+  poolTex.t = drawnTexture(128, 128, (ctx) => {
+    const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,255,255,0.9)');
+    g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, 128, 128);
+  });
   poolTex.t.colorSpace = THREE.SRGBColorSpace;
   poolTex.t.userData.cached = true;
   return poolTex.t;

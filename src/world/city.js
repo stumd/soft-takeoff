@@ -1,4 +1,4 @@
-import { THREE, box, cyl, sphere, ico, cone, group, mat, card, textTex, windowTex, emissiveWindowTex, tiledBoxGeo, addMist, markCached } from './kit.js';
+import { THREE, box, cyl, sphere, ico, cone, group, mat, card, textTex, windowTex, emissiveWindowTex, tiledBoxGeo, addMist, markCached, drawnTexture } from './kit.js';
 import { G } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
@@ -209,16 +209,14 @@ const puffTex = (() => {
   let t;
   return () => {
     if (t) return t;
-    const c = document.createElement('canvas');
-    c.width = c.height = 64;
-    const ctx = c.getContext('2d');
-    const gr = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
-    gr.addColorStop(0, 'rgba(255,255,255,0.9)');
-    gr.addColorStop(0.5, 'rgba(255,255,255,0.45)');
-    gr.addColorStop(1, 'rgba(255,255,255,0)');
-    ctx.fillStyle = gr;
-    ctx.fillRect(0, 0, 64, 64);
-    t = markCached(new THREE.CanvasTexture(c));
+    t = markCached(drawnTexture(64, 64, (ctx) => {
+      const gr = ctx.createRadialGradient(32, 32, 2, 32, 32, 30);
+      gr.addColorStop(0, 'rgba(255,255,255,0.9)');
+      gr.addColorStop(0.5, 'rgba(255,255,255,0.45)');
+      gr.addColorStop(1, 'rgba(255,255,255,0)');
+      ctx.fillStyle = gr;
+      ctx.fillRect(0, 0, 64, 64);
+    }));
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };
