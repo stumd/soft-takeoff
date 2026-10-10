@@ -1,5 +1,6 @@
 import { THREE, box, cyl, sphere, ico, cone, group, mat, card, textTex, windowTex, emissiveWindowTex, tiledBoxGeo, addMist, markCached } from './kit.js';
 import { G } from '../engine/stage.js';
+import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
 
 // The world beyond the garden fence. In an orthographic view, distance turns into
@@ -226,7 +227,7 @@ export { puffTex };
 
 export function plume(o = {}) {
   const g = new THREE.Group();
-  const n = o.n ?? 8;
+  const n = QUALITY.lite ? 3 : o.n ?? 8;
   const puffs = [];
   const tint = new THREE.Color(o.color || '#f4f0ea');
   for (let i = 0; i < n; i++) {

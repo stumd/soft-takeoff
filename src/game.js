@@ -6,7 +6,8 @@ import { renderBlocks, inline } from './ui/panel.js';
 import { audio } from './audio/audio.js';
 import { tweens, tween, wait, Ease, clamp } from './engine/tween.js';
 import { G } from './engine/stage.js';
-import { QUALITY, stepDown, switchTier, noteLoss, TIER_LABELS } from './engine/quality.js';
+import { QUALITY, switchTier, rememberTier, noteLoss, TIER_LABELS } from './engine/quality.js';
+import { NullStage, NullWorld } from './engine/nullstage.js';
 
 const $ = (id) => document.getElementById(id);
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -61,6 +62,7 @@ export class Game {
     stage.onTick.push((dt, t) => this._frame(dt, t));
     stage.onContextLost = () => this._contextLost();
     stage.onContextRestored = () => this._contextRestored();
+    stage.onContextBlocked = () => this.switchToText('blocked');
     stage.onSlow = () => {
       if (!QUALITY.text) this.toast(`Running slowly? Try ${QUALITY.full ? 'Lite or ' : ''}Text only under ? → Graphics.`, 7000);
     };
@@ -176,6 +178,7 @@ export class Game {
   }
 
   toggleHelp(on) {
+    if (on) this._buildGraphicsSettings();
     $('help').classList.toggle('hidden', !on);
     if (on) $('help-close').focus();
   }
@@ -197,8 +200,25 @@ export class Game {
       };
       row.appendChild(b);
     }
-    const why = { auto: 'chosen automatically for this device', chosen: 'your choice', url: 'set by the link', 'no-webgl2': 'this browser has no WebGL 2', 'webgl-failed': '3D could not start here' }[QUALITY.reason] || '';
-    $('gfx-info').textContent = `Now: ${TIER_LABELS[QUALITY.tier]}${why ? ` (${why})` : ''}.${QUALITY.gpu ? ` GPU: ${QUALITY.gpu}.` : ''}`;
+    const why = {
+      auto: 'chosen automatically for this device',
+      chosen: 'your choice',
+      url: 'set by the link',
+      'no-webgl2': '3D isn’t available in this browser right now',
+      'webgl-failed': '3D could not start here',
+      'not-restored': 'the graphics stopped and didn’t come back',
+      'lost-twice': 'the graphics stopped twice',
+      blocked: 'the browser paused 3D after the graphics stopped',
+    }[QUALITY.reason] || '';
+    const bits = [`Now: ${TIER_LABELS[QUALITY.tier]}${why ? ` (${why})` : ''}.`];
+    if (QUALITY.gpu) bits.push(`GPU: ${QUALITY.gpu}.`);
+    const r = this.stage && this.stage.renderer;
+    if (r && r.getDrawingBufferSize && !QUALITY.text) {
+      const v = r.getDrawingBufferSize(new THREE.Vector2());
+      bits.push(`Canvas ${v.x}×${v.y}.`);
+    }
+    if (QUALITY.losses) bits.push(`Graphics losses this session: ${QUALITY.losses}.`);
+    $('gfx-info').textContent = bits.join(' ');
   }
 
   toast(text, ms = 4000) {
@@ -221,30 +241,77 @@ export class Game {
     }
   }
 
-  // The GPU dropped our context. Give the browser a moment to restore it;
-  // if it doesn't (or it keeps happening), step down a graphics tier and reload.
+  // The GPU dropped our context. On phones (Android WebView especially) a real
+  // loss is often permanent, and two losses get 3D blocked for the page, so we
+  // never simply carry on at the same settings:
+  //   - restored within a few seconds: keep going, but ask much less of the GPU;
+  //   - not restored, blocked, or lost again: continue the story in text mode,
+  //     in place, with no reload (reloading can loop if storage is blocked).
   _contextLost() {
+    if (QUALITY.text) return;
     document.body.classList.add('gl-lost');
     const n = noteLoss();
-    this.toast('The graphics stopped. Restarting them…', 0);
+    // Whatever happens next, start lighter next time.
+    if (QUALITY.full) rememberTier('lite');
     clearTimeout(this._lossTimer);
-    const giveUp = () => {
-      const tierNow = TIER_LABELS[QUALITY.tier];
-      const note = QUALITY.lite
-        ? 'Your device’s graphics stopped twice, so the story is now told without the 3D diorama. You can change this under ? → Graphics.'
-        : `Your device’s graphics stopped, so this is now running with lighter graphics (was ${tierNow}). You can change this under ? → Graphics.`;
-      this._persist();
-      stepDown({ note });
-    };
-    if (n >= 2) giveUp();
-    else this._lossTimer = setTimeout(giveUp, 3500);
+    if (n >= 2) return this.switchToText('lost-twice');
+    this.toast('The graphics stopped. Restarting them…', 0);
+    this._lossTimer = setTimeout(() => this.switchToText('not-restored'), 3500);
   }
 
   _contextRestored() {
-    document.body.classList.remove('gl-lost');
+    if (QUALITY.text) return;
     clearTimeout(this._lossTimer);
     this._lossTimer = null;
-    this.toast('Graphics restored.', 2500);
+    this.stage.lighten();
+    document.body.classList.remove('gl-lost');
+    this.toast('Graphics restored, with lighter settings.', 3000);
+  }
+
+  // Swap the 3D stage for the text-only one without leaving the current moment.
+  switchToText(why) {
+    if (QUALITY.text) return;
+    const prev = QUALITY.tier;
+    clearTimeout(this._lossTimer);
+    const old = this.stage;
+    const oldWorld = this.world;
+    old.stop && old.stop();
+    // Share the tick list so anything mid-flight (the kettle, a transition) keeps running.
+    const ticks = old.onTick;
+    const i = ticks.indexOf(oldWorld.tickFn);
+    if (i >= 0) ticks.splice(i, 1);
+    const ns = new NullStage(old.renderer.domElement);
+    ns.onTick = ticks;
+    ns.env = old.env;
+    ns.applyEnv();
+    if (old._envTween) {
+      // Let an in-progress lighting change finish on the new stage.
+      const target = this.scene ? this.scene.env : 'dusk';
+      ns.setEnv(target, 1.5);
+    }
+    ns.cam = old.cam;
+    const nw = new NullWorld(ns);
+    this.stage = ns;
+    this.world = nw;
+    QUALITY.tier = 'text';
+    QUALITY.reason = why || 'lost';
+    document.body.classList.remove('tier-full', 'tier-lite', 'gl-lost');
+    document.body.classList.add('tier-text');
+    $('markers').innerHTML = '';
+    this._setHover(null);
+    if (this.scene && this.state !== 'title') {
+      nw.setHotspots(this.scene.hotspots);
+      this._buildMarkers();
+      if (this.state === 'choose') this.enterChoose(true);
+    }
+    ns.start();
+    try { old.renderer.dispose(); } catch (e) { /* already gone */ }
+    // Next visit: one step lighter than whatever just failed.
+    rememberTier(prev === 'full' ? 'lite' : 'text');
+    this._buildGraphicsSettings();
+    const note = 'Your device’s graphics stopped, so the story carries on without the 3D diorama. You can try 3D again under ? → Graphics.';
+    this.toast(note, 9000);
+    this.showNote(note);
   }
 
   showTitleWorld() {
@@ -691,8 +758,8 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ the answer
-  enterChoose() {
-    if (this.state === 'choose') return;
+  enterChoose(force) {
+    if (this.state === 'choose' && !force) return;
     this.closePanel();
     this.state = 'choose';
     const banner = $('banner');

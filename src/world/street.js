@@ -122,22 +122,47 @@ export function lampPosts(p = {}) {
       ? box(0.42, 0.02, 0.1, '', { mat: bulbMat, y: 2.97, x: 0.2, cast: false })
       : box(0.14, 0.04, 0.24, '', { mat: bulbMat, y: 3.01, z: 0.5, cast: false });
     l.add(bulb);
-    const pl = QUALITY.lite ? null : new THREE.PointLight(p.style === 'new' ? '#e8f0ff' : '#ffa850', 0, 7, 1.6);
-    if (pl) {
-      pl.position.set(0, 2.8, 0.5);
-      l.add(pl);
-    }
-    lamps.push({ bulbMat, pl });
+    // A pool of light on the ground instead of a real point light: every point
+    // light makes every lit shader heavier, and changing their number between
+    // visits forces every shader to recompile.
+    const poolMat = new THREE.MeshBasicMaterial({
+      map: poolTex(), color: p.style === 'new' ? '#dfeaff' : '#ffb060', transparent: true, opacity: 0,
+      depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    });
+    const pool = new THREE.Mesh(new THREE.CircleGeometry(2.3, 28), poolMat);
+    pool.rotation.x = -Math.PI / 2;
+    pool.position.set(0, 0.03, p.style === 'new' ? 0.2 : 0.5);
+    pool.renderOrder = 2;
+    l.add(pool);
+    const pl = null;
+    lamps.push({ bulbMat, pl, poolMat });
     g.add(l);
   }
   g.userData.tick = () => {
     const on = G.night > 0.3 ? Math.min(1, (G.night - 0.3) * 2.5) : 0;
     for (const l of lamps) {
       l.bulbMat.emissiveIntensity = on * 2.2;
-      if (l.pl) l.pl.intensity = on * 6;
+      l.poolMat.opacity = on * 0.5;
     }
   };
   return g;
+}
+
+function poolTex() {
+  if (poolTex.t) return poolTex.t;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const ctx = c.getContext('2d');
+  const g = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+  g.addColorStop(0, 'rgba(255,255,255,0.9)');
+  g.addColorStop(0.35, 'rgba(255,255,255,0.45)');
+  g.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, 128, 128);
+  poolTex.t = new THREE.CanvasTexture(c);
+  poolTex.t.colorSpace = THREE.SRGBColorSpace;
+  poolTex.t.userData.cached = true;
+  return poolTex.t;
 }
 
 export function car(p = {}) {

@@ -288,12 +288,9 @@ export function pip(p = {}) {
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.1;
   g.add(ring);
-  // Every point light makes every lit shader heavier, so the lite tier skips this one.
-  const light = QUALITY.lite ? null : new THREE.PointLight(p.color || '#ffd59a', 0, 1.2, 2);
-  if (light) {
-    light.position.y = 0.2;
-    g.add(light);
-  }
+  // No point light here: the emissive ring is enough, and a constant number of
+  // lights across visits keeps shaders from recompiling.
+  const light = null;
   let speak = 0;
   g.userData.speak = (v) => { speak = v; };
   g.userData.tick = (dt, t) => {

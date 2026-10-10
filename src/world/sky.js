@@ -1,5 +1,6 @@
 import { THREE, mat } from './kit.js';
 import { G } from '../engine/stage.js';
+import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
 import { puffTex } from './city.js';
 
@@ -88,7 +89,7 @@ export function clouds(p = {}) {
   const items = [];
   for (let i = 0; i < n; i++) {
     const c = new THREE.Group();
-    for (let k = 0; k < 6; k++) {
+    for (let k = 0; k < (QUALITY.lite ? 3 : 6); k++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: puffTex(), color: col, transparent: true, opacity: p.opacity ?? 0.9, depthWrite: false, fog: false }));
       const sc = 3 + r() * 4;
       s.scale.set(sc * 1.6, sc, 1);

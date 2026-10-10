@@ -61,10 +61,28 @@ function looksMobile() {
   return coarse || mobileUA || tablet || lowMem || fewCores;
 }
 
+// window.name survives a reload of this frame even when Web Storage is blocked
+// (sandboxed viewers), so tier switches and notes ride along in it too.
+const NAME_PREFIX = 'soft-takeoff:';
+function readWindowName() {
+  try {
+    if (typeof window.name === 'string' && window.name.startsWith(NAME_PREFIX)) {
+      const v = JSON.parse(window.name.slice(NAME_PREFIX.length));
+      window.name = '';
+      return v || {};
+    }
+  } catch (e) { /* ignore */ }
+  return {};
+}
+function writeWindowName(v) {
+  try { window.name = NAME_PREFIX + JSON.stringify(v); } catch (e) { /* ignore */ }
+}
+const carried = readWindowName();
+
 function decide() {
   const params = new URLSearchParams(location.search);
   const forced = params.get('quality');
-  const stored = read(local, KEY);
+  const stored = carried.tier || read(local, KEY);
   const probe = probeWebGL2();
   let tier;
   let reason;
@@ -98,20 +116,21 @@ export const QUALITY = {
   losses: Number(read(session, LOSS_KEY + d.tier) || 0),
 };
 
-// Persist a tier and reload, optionally resuming the current game state.
+// Remember a tier for the next visit, without reloading.
+export function rememberTier(tier) {
+  write(local, KEY, tier);
+}
+
+// Persist a tier and reload (used by the Graphics buttons in Help).
 export function switchTier(tier, resume) {
   write(local, KEY, tier);
   if (resume) write(session, RESUME_KEY, JSON.stringify(resume));
+  writeWindowName({ tier, note: resume && resume.note });
   location.reload();
 }
 
 export function clearTierChoice() {
   write(local, KEY, null);
-}
-
-export function stepDown(resume) {
-  const next = TIERS[Math.min(TIERS.length - 1, TIERS.indexOf(QUALITY.tier) + 1)];
-  switchTier(next, resume);
 }
 
 export function noteLoss() {
@@ -123,7 +142,10 @@ export function noteLoss() {
 export function takeResume() {
   const raw = read(session, RESUME_KEY);
   write(session, RESUME_KEY, null);
-  try { return raw ? JSON.parse(raw) : null; } catch (e) { return null; }
+  let v = null;
+  try { v = raw ? JSON.parse(raw) : null; } catch (e) { v = null; }
+  if (!v && carried.note) v = { note: carried.note };
+  return v;
 }
 
 export const TIER_LABELS = { full: 'Full', lite: 'Lite', text: 'Text only' };

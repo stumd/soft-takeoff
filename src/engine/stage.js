@@ -84,10 +84,13 @@ export class Stage {
     // Phones get no MSAA, a lower pixel ratio and simpler shadows: drawing-buffer
     // memory and shader cost are what make mobile GPUs drop the context.
     const r = new THREE.WebGLRenderer({ canvas, antialias: !lite, powerPreference: lite ? 'default' : 'high-performance' });
-    this.maxRatio = lite ? 1.5 : 2;
+    this.maxRatio = lite ? 1.25 : 2;
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxRatio));
     r.shadowMap.enabled = true;
     r.shadowMap.type = lite ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+    // On lite the shadow pass (a second draw of most of the scene) runs every third frame.
+    r.shadowMap.autoUpdate = !lite;
+    this._frame = 0;
     r.toneMapping = THREE.NeutralToneMapping;
     r.toneMappingExposure = 1.0;
     this.renderer = r;
@@ -136,6 +139,10 @@ export class Stage {
       this.contextLost = false;
       this.onContextRestored && this.onContextRestored();
     });
+    // Fired when the browser refuses a new context, e.g. after repeated GPU losses.
+    canvas.addEventListener('webglcontextcreationerror', () => {
+      this.onContextBlocked && this.onContextBlocked();
+    });
     this._resize();
     this._bindControls(canvas);
   }
@@ -178,7 +185,8 @@ export class Stage {
     // A soft, shadowless fill from the camera side keeps the cutaway readable at night.
     this.fill = new THREE.DirectionalLight(0xffffff, 0.3);
     this.fill.position.set(30, 25, 40);
-    this.scene.add(this.fill);
+    // Lite folds the fill into the hemisphere light: one less light in every shader.
+    if (!QUALITY.lite) this.scene.add(this.fill);
   }
 
   setEnv(name, dur = 2.5) {
@@ -218,10 +226,10 @@ export class Stage {
     this.sun.color.copy(e.sunColor);
     this.sun.intensity = e.sunIntensity;
     const az = e.sunAz, el = e.sunEl;
-    this._sunDir = new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+    (this._sunDir ||= new THREE.Vector3()).set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
     this.hemi.color.copy(e.hemiSky);
     this.hemi.groundColor.copy(e.hemiGround);
-    this.hemi.intensity = e.hemiIntensity;
+    this.hemi.intensity = e.hemiIntensity + (QUALITY.lite ? e.fill * 0.8 : 0);
     this.fill.intensity = e.fill;
     this.fill.color.copy(e.hemiSky);
     this.renderer.toneMappingExposure = e.exposure;
@@ -319,7 +327,7 @@ export class Stage {
     const v = this.view;
     const az = v.az + c.sway;
     const el = v.el;
-    const dir = new THREE.Vector3(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+    const dir = (this._camDir ||= new THREE.Vector3()).set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
     const cam = this.camera;
     cam.position.copy(v.target).addScaledVector(dir, v.dist);
     cam.lookAt(v.target);
@@ -344,7 +352,7 @@ export class Stage {
     mistUniforms.uFogFar.value = v.dist + 46;
 
     // Keep the sun's shadow frustum centred on the diorama.
-    const sd = this._sunDir || new THREE.Vector3(1, 1, 1).normalize();
+    const sd = this._sunDir;
     this.sunTarget.position.set(3.5, 0, -0.5);
     this.sun.position.copy(this.sunTarget.position).addScaledVector(sd, 60);
   }
@@ -374,8 +382,49 @@ export class Stage {
     }
   }
 
+  // Compile every shader the first scene needs before showing anything, using
+  // the parallel-compile extension where available, so the first frames don't
+  // stall the GPU (a classic trigger for mobile context loss).
+  async warmup(timeoutMs = 4000) {
+    const canvas = this.renderer.domElement;
+    this.hold = true;
+    canvas.classList.add('warming');
+    try {
+      this._updateCamera(0);
+      await Promise.race([
+        this.renderer.compileAsync(this.scene, this.camera),
+        new Promise((r) => setTimeout(r, timeoutMs)),
+      ]);
+    } catch (e) {
+      /* fall through: render compiles synchronously */
+    }
+    this.hold = false;
+    requestAnimationFrame(() => canvas.classList.remove('warming'));
+  }
+
+  // After a restored context, ask less of the GPU than before.
+  lighten() {
+    this.maxRatio = 1;
+    this.renderer.setPixelRatio(1);
+    this._resize();
+    if (this._adaptState) this._adaptState.settled = true;
+    const sm = this.sun.shadow;
+    if (sm.mapSize.x > 1024) {
+      sm.mapSize.set(1024, 1024);
+      sm.map?.dispose();
+      sm.map = null;
+    }
+    this.renderer.shadowMap.autoUpdate = false;
+    this._shadowEvery = 4;
+  }
+
+  stop() {
+    this._stopped = true;
+  }
+
   start() {
     const loop = () => {
+      if (this._stopped) return;
       requestAnimationFrame(loop);
       const raw = this.clock.getDelta();
       if (this.maxDt < 1) this._adapt(raw);
@@ -385,14 +434,15 @@ export class Stage {
       for (const f of this.onTick) f(dt, G.time);
       this._updateCamera(dt);
       if (this.onLate) this.onLate(dt);
-      this.renderer.render(this.scene, this.camera);
+      if (!this.renderer.shadowMap.autoUpdate && this._frame++ % (this._shadowEvery || 3) === 0) this.renderer.shadowMap.needsUpdate = true;
+      if (!this.hold && !this.contextLost) this.renderer.render(this.scene, this.camera);
     };
     loop();
   }
 
   // Project a world position to CSS pixels.
   toScreen(v3, out = { x: 0, y: 0, visible: true }) {
-    const p = v3.clone().project(this.camera);
+    const p = (this._proj ||= new THREE.Vector3()).copy(v3).project(this.camera);
     out.x = (p.x * 0.5 + 0.5) * this.width;
     out.y = (-p.y * 0.5 + 0.5) * this.height;
     out.visible = p.z > -1 && p.z < 1;

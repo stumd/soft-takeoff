@@ -52,6 +52,8 @@ if (debugScene != null) {
 }
 
 stage.start();
+// Compile shaders up front (behind a fade) rather than in the first frames.
+if (stage.warmup) stage.warmup();
 window.__game = game;
 window.__stage = stage;
 window.__world = world;

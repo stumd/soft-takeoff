@@ -48,8 +48,12 @@ export class World {
     this.byHotspot = new Map();
     this.hovered = null;
     this.raycaster = new THREE.Raycaster();
-    stage.onTick.push((dt, t) => this.tick(dt, t));
+    this.tickFn = (dt, t) => this.tick(dt, t);
+    stage.onTick.push(this.tickFn);
     stage.onLate = (dt) => this.followCamera();
+    this._fwd = new THREE.Vector3();
+    this._right = new THREE.Vector3();
+    this._up = new THREE.Vector3();
   }
 
   get(id) {
@@ -324,9 +328,9 @@ export class World {
     const st = this.stage;
     const cam = st.camera;
     const q = cam.quaternion;
-    const fwd = new THREE.Vector3(0, 0, -1).applyQuaternion(q);
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(q);
-    const up = new THREE.Vector3(0, 1, 0).applyQuaternion(q);
+    const fwd = this._fwd.set(0, 0, -1).applyQuaternion(q);
+    const right = this._right.set(1, 0, 0).applyQuaternion(q);
+    const up = this._up.set(0, 1, 0).applyQuaternion(q);
     const cx = (cam.left + cam.right) / 2;
     const cy = (cam.top + cam.bottom) / 2;
     this.sky.quaternion.copy(q);

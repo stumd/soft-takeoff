@@ -38,13 +38,14 @@ class Tweens {
     for (let i = 0; i < list.length; i++) {
       const tw = list[i];
       if (tw.dead) continue;
+      let step = dt;
       if (tw.delay > 0) {
         tw.delay -= dt;
         if (tw.delay > 0) continue;
-        dt = -tw.delay; // carry the leftover into this frame
+        step = -tw.delay; // carry this tween's leftover into this frame
         tw.delay = 0;
       }
-      tw.t += dt;
+      tw.t += step;
       const k = Math.min(1, tw.t / tw.dur);
       if (tw.update) tw.update(tw.ease(k), k);
       if (k >= 1) {
@@ -52,7 +53,12 @@ class Tweens {
         if (tw.done) tw.done();
       }
     }
-    if (list.length > 64) this.list = list.filter((t) => !t.dead);
+    if (list.length > 64) {
+      // Compact in place rather than allocating a new array every frame.
+      let j = 0;
+      for (let i = 0; i < list.length; i++) if (!list[i].dead) list[j++] = list[i];
+      list.length = j;
+    }
   }
 }
 
