@@ -7,7 +7,7 @@ import { audio } from './audio/audio.js';
 import { tweens, tween, wait, Ease, clamp } from './engine/tween.js';
 import { G } from './engine/stage.js';
 import { cloneEnv } from './engine/env.js';
-import { QUALITY, switchTier, rememberTier, noteLoss, TIER_LABELS } from './engine/quality.js';
+import { QUALITY, switchTier, rememberTier, noteLoss, TIER_LABELS, shadowsLost, chooseShadows, logLoss, readLossLog, markLossRestored } from './engine/quality.js';
 import { repaintAllTextures } from './world/kit.js';
 import { NullStage, NullWorld } from './engine/nullstage.js';
 
@@ -64,7 +64,15 @@ export class Game {
     stage.onTick.push((dt, t) => this._frame(dt, t));
     stage.onContextLost = () => this._contextLost();
     stage.onContextRestored = () => this._contextRestored();
-    stage.onContextBlocked = () => this.switchToText('blocked');
+    // The browser refused to give the context back: no point waiting.
+    stage.onContextBlocked = () => { if (this.stage.contextLost) this.switchToText('blocked'); };
+    // When the page was last hidden or shown: a loss handled just after an app
+    // switch belongs to the switch, not to a failing GPU.
+    this._awayAt = -1e9;
+    const away = () => { this._awayAt = performance.now(); };
+    document.addEventListener('visibilitychange', away);
+    window.addEventListener('pagehide', away);
+    document.addEventListener('freeze', away);
     stage.onSlow = () => {
       if (!QUALITY.text) this.toast(`Running slowly? Try ${QUALITY.full ? 'Lite or ' : ''}Text only under ? → Graphics.`, 7000);
     };
@@ -213,6 +221,28 @@ export class Game {
       };
       row.appendChild(b);
     }
+    // Shadows: their own switch, since they are what some phone GPUs choke on.
+    const srow = $('gfx-shadows');
+    if (srow) {
+      srow.innerHTML = '';
+      const label = document.createElement('span');
+      label.className = 'gfx-label';
+      label.textContent = 'Shadows';
+      srow.appendChild(label);
+      for (const on of [true, false]) {
+        const b = document.createElement('button');
+        const now = QUALITY.shadows === on;
+        b.textContent = on ? 'On' : 'Off';
+        b.className = 'gfx small' + (now ? ' on' : '');
+        b.setAttribute('aria-pressed', now ? 'true' : 'false');
+        b.onclick = () => {
+          if (QUALITY.shadows === on) return;
+          this._persist();
+          chooseShadows(on, { note: `Shadows turned ${on ? 'on' : 'off'}.` });
+        };
+        srow.appendChild(b);
+      }
+    }
     const why = {
       auto: 'chosen automatically for this device',
       chosen: 'your choice',
@@ -224,15 +254,63 @@ export class Game {
       blocked: 'the browser paused 3D after the graphics stopped',
       'after-loss': 'lighter, after the graphics stopped last time',
     }[QUALITY.reason] || '';
+    const shWhy = {
+      gpu: 'this graphics chip has a known fault with shadows',
+      lost: 'since the graphics stopped',
+      chosen: 'your choice',
+      url: 'set by the link',
+    }[QUALITY.shadowWhy];
     const bits = [`Now: ${TIER_LABELS[QUALITY.tier]}${why ? ` (${why})` : ''}.`];
+    if (!QUALITY.text) bits.push(`Shadows ${QUALITY.shadows ? 'on' : 'off'}${shWhy ? ` (${shWhy})` : ''}.`);
     if (QUALITY.gpu) bits.push(`GPU: ${QUALITY.gpu}.`);
     const r = this.stage && this.stage.renderer;
     if (r && r.getDrawingBufferSize && !QUALITY.text) {
       const v = r.getDrawingBufferSize(new THREE.Vector2());
       bits.push(`Canvas ${v.x}×${v.y}.`);
     }
-    if (QUALITY.losses) bits.push(`Graphics losses this session: ${QUALITY.losses}.`);
+    if (QUALITY.tabLosses) bits.push(`Graphics losses in this tab: ${QUALITY.tabLosses}.`);
     $('gfx-info').textContent = bits.join(' ');
+    const copy = $('gfx-copy');
+    if (copy) copy.onclick = () => this._copyDiagnostics();
+  }
+
+  // Everything useful for a report about the graphics, as plain text.
+  async _diagnostics() {
+    const lines = [`Soft Takeoff ${typeof __BUILD__ !== 'undefined' ? __BUILD__ : ''}`];
+    lines.push(`Tier: ${QUALITY.tier} (${QUALITY.reason}); shadows ${QUALITY.shadows ? 'on' : 'off'} (${QUALITY.shadowWhy})`);
+    lines.push(`GPU: ${QUALITY.gpu || 'unknown'}`);
+    const r = this.stage && this.stage.renderer;
+    if (r && r.getDrawingBufferSize && !QUALITY.text) {
+      const v = r.getDrawingBufferSize(new THREE.Vector2());
+      const ext = r.extensions && r.extensions.has && r.extensions.has('KHR_parallel_shader_compile');
+      lines.push(`Canvas ${v.x}x${v.y} @${r.getPixelRatio()}, parallel compile: ${ext ? 'yes' : 'no'}`);
+    }
+    const ua = navigator.userAgent || '';
+    lines.push(`UA: ${ua}${/; wv\)/.test(ua) ? ' [WebView]' : ''}`);
+    try {
+      const hi = navigator.userAgentData && await navigator.userAgentData.getHighEntropyValues(['model', 'platformVersion', 'fullVersionList']);
+      if (hi) lines.push(`Device: ${hi.model || '?'}; ${hi.platform || ''} ${hi.platformVersion || ''}; ${(hi.fullVersionList || []).map((b) => `${b.brand} ${b.version}`).join(', ')}`);
+    } catch (e) { /* not available */ }
+    lines.push(`Storage: ${QUALITY.storage ? 'yes' : 'blocked'}; losses this page ${QUALITY.losses}, this tab ${QUALITY.tabLosses}`);
+    for (const l of readLossLog()) {
+      const ago = Math.round((Date.now() - l.at) / 60000);
+      lines.push(`Loss ${ago} min ago: ${l.where}, ${l.frames} frames / ${l.ms} ms after start, shadows ${l.shadows ? 'on' : 'off'}, ${l.tier}${l.away ? ', app in background' : ''}${l.restored != null ? `, back after ${l.restored} ms` : ''}`);
+    }
+    return lines.join('\n');
+  }
+
+  async _copyDiagnostics() {
+    const text = await this._diagnostics();
+    const out = $('gfx-log');
+    out.value = text;
+    out.classList.remove('hidden');
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast('Copied graphics details.', 2500);
+    } catch (e) {
+      out.focus();
+      out.select();
+    }
   }
 
   toast(text, ms = 4000) {
@@ -258,7 +336,8 @@ export class Game {
   // The GPU dropped our context. On phones (Android WebView especially) a real
   // loss is often permanent, and two losses get 3D blocked for the page, so we
   // never simply carry on at the same settings:
-  //   - restored within a few seconds: keep going, but ask much less of the GPU;
+  //   - first loss: shadows off for good (the known trigger on some phone
+  //     GPUs), then wait for the browser to give the context back;
   //   - not restored, blocked, or lost again: continue the story in text mode,
   //     in place, with no reload (reloading can loop if storage is blocked).
   _contextLost() {
@@ -267,17 +346,35 @@ export class Game {
     clearTimeout(this._lossTimer);
     // Phones drop GPU contexts when you switch apps; that's not a failure of
     // ours. Give those their restore window once the page is visible again,
-    // and don't count them against this device.
-    if (document.hidden) {
-      this._lossWhileHidden = true;
-      this._watchVisibility();
+    // and don't count them against this device. The event can arrive a
+    // moment after the page comes back, so a recent switch counts too.
+    const away = document.hidden || performance.now() - this._awayAt < 2000;
+    const st = this.stage;
+    this._lossAt = performance.now();
+    logLoss({
+      at: Date.now(),
+      where: this.busy ? `visit ${this.index + 1}, changing` : this.state === 'title' ? 'title' : `visit ${this.index + 1}, ${this.state}`,
+      frames: st.ctxFrames,
+      ms: Math.round(performance.now() - st.ctxStart),
+      shadows: !!(st.sun && st.sun.castShadow),
+      tier: QUALITY.tier,
+      away,
+    });
+    this._lossWhileHidden = away;
+    this._watchVisibility();
+    if (away) {
+      if (!document.hidden) this._startRestoreDeadline();
       return;
     }
-    this._lossWhileHidden = false;
     const n = noteLoss();
+    // Shadow maps are the known trigger on some phone GPUs. Dropping them
+    // while the context is gone means it comes back without them.
+    if (st.sun && st.sun.castShadow) {
+      st.disableShadows();
+      shadowsLost();
+    }
     if (n >= 2) return this.switchToText('lost-twice');
     if (this.state !== 'title') this.toast('The graphics stopped. Restarting them…', 0);
-    this._watchVisibility();
     this._startRestoreDeadline();
   }
 
@@ -298,9 +395,11 @@ export class Game {
     this._onVisible = null;
   }
 
+  // Chrome retries a restore every second, and restarting its GPU process
+  // can take a few; WebView may never manage it.
   _startRestoreDeadline() {
     clearTimeout(this._lossTimer);
-    this._lossTimer = setTimeout(() => this.switchToText('not-restored'), 3500);
+    this._lossTimer = setTimeout(() => this.switchToText('not-restored'), 8000);
   }
 
   _contextRestored() {
@@ -308,6 +407,7 @@ export class Game {
     clearTimeout(this._lossTimer);
     this._lossTimer = null;
     this._stopWatchingVisibility();
+    if (this._lossAt) markLossRestored(Math.round(performance.now() - this._lossAt));
     // A GPU crash can also wipe 2D canvases: repaint every texture.
     repaintAllTextures();
     if (this._lossWhileHidden) {
@@ -323,7 +423,7 @@ export class Game {
     document.body.classList.remove('gl-lost');
     // Recompile behind a fade instead of in one blocking frame.
     this.stage.warmup && this.stage.warmup(3000);
-    if (this.state !== 'title') this.toast('Graphics restored, with lighter settings.', 3000);
+    if (this.state !== 'title') this.toast('Graphics restored, without shadows.', 3000);
   }
 
   // Swap the 3D stage for the text-only one without leaving the current moment.

@@ -3,12 +3,21 @@
 //   lite - phones and weak GPUs: Lambert materials, no MSAA, small shadows, fewer lights
 //   text - no WebGL at all: the story is told without the diorama
 // The tier is chosen once at startup, before any materials exist. If the GPU
-// gives up mid-game we step down a tier and reload, resuming where we were.
+// gives up mid-game we step down in place (shadows off, then text) and
+// remember the step for the next visit.
+//
+// Shadows are a separate switch. Real-time shadow maps make PowerVR D-Series
+// GPUs (Pixel 10) reset the WebGL context within seconds, whatever the map
+// size or filter, so those GPUs start without them; any device that loses
+// its context also turns them off. Objects then get soft contact shadows.
 
 const KEY = 'soft-takeoff-quality';
 const RESUME_KEY = 'soft-takeoff-resume';
 const LOSS_KEY = 'soft-takeoff-losses';
+const SHADOW_KEY = 'soft-takeoff-shadows';
+const LOG_KEY = 'soft-takeoff-loss-log';
 const TIERS = ['full', 'lite', 'text'];
+const SHADOW_BUG_GPU = /PowerVR|Imagination|img-tec/i;
 
 function store(kind) {
   try {
@@ -74,10 +83,15 @@ function readWindowName() {
   } catch (e) { /* ignore */ }
   return {};
 }
-function writeWindowName(v) {
-  try { window.name = NAME_PREFIX + JSON.stringify(v); } catch (e) { /* ignore */ }
-}
 const carried = readWindowName();
+// Everything we want carried over the next reload, merged.
+const carryOut = {};
+function writeWindowName(v) {
+  Object.assign(carryOut, v);
+  try { window.name = NAME_PREFIX + JSON.stringify(carryOut); } catch (e) { /* ignore */ }
+}
+// Keep the shadow setting riding along even when nothing else changes.
+if (carried.shadows) writeWindowName({ shadows: carried.shadows });
 
 function decide() {
   const params = new URLSearchParams(location.search);
@@ -111,18 +125,91 @@ function decide() {
   return { tier, reason, probe };
 }
 
+// Stored values: 'on' / 'off' (chosen under Help → Graphics), 'lost' (turned
+// off after the graphics stopped). A choice beats the GPU rule, so a PowerVR
+// owner can still try shadows.
+function decideShadows(probe) {
+  const forced = new URLSearchParams(location.search).get('shadows');
+  if (forced === '0' || forced === '1') return { shadows: forced === '1', why: 'url' };
+  const v = carried.shadows || read(local, SHADOW_KEY);
+  if (v === 'on' || v === 'off') return { shadows: v === 'on', why: 'chosen' };
+  if (v === 'lost') return { shadows: false, why: 'lost' };
+  if (SHADOW_BUG_GPU.test(probe.gpu || '')) return { shadows: false, why: 'gpu' };
+  return { shadows: true, why: 'default' };
+}
+
 const d = decide();
+const sh = decideShadows(d.probe);
+
+// Losses are counted per page load; the per-tab total is kept for diagnostics.
+const tabLosses = Number(read(session, LOSS_KEY) || 0);
 
 export const QUALITY = {
   tier: d.tier,
   reason: d.reason,
   gpu: d.probe.gpu || '',
   probe: d.probe,
+  shadows: sh.shadows,
+  shadowWhy: sh.why,
   get full() { return this.tier === 'full'; },
   get lite() { return this.tier === 'lite'; },
   get text() { return this.tier === 'text'; },
-  losses: Number(read(session, LOSS_KEY + d.tier) || 0),
+  losses: 0,
+  tabLosses,
+  storage: !!local,
 };
+
+// Turn shadows off for good on this device after a loss.
+export function shadowsLost() {
+  QUALITY.shadows = false;
+  QUALITY.shadowWhy = 'lost';
+  write(local, SHADOW_KEY, 'lost');
+  writeWindowName({ shadows: 'lost' });
+}
+
+// Help → Graphics: an explicit choice, applied by reloading.
+export function chooseShadows(on, resume) {
+  const v = on ? 'on' : 'off';
+  write(local, SHADOW_KEY, v);
+  write(session, RESUME_KEY, JSON.stringify({ ...(resume || {}) }));
+  writeWindowName({ shadows: v, note: resume && resume.note });
+  reloadWithout('shadows');
+}
+
+function reloadWithout(param) {
+  try {
+    const u = new URL(location.href);
+    if (u.searchParams.has(param)) {
+      u.searchParams.delete(param);
+      location.replace(u.href);
+      return;
+    }
+  } catch (e) { /* fall back to reload */ }
+  location.reload();
+}
+
+// A short log of recent losses, kept across reloads so a report can say what
+// the renderer was doing when the GPU gave up.
+export function readLossLog() {
+  try { return JSON.parse(read(local, LOG_KEY) || read(session, LOG_KEY) || '[]'); } catch (e) { return []; }
+}
+function writeLossLog(log) {
+  while (log.length > 6) log.shift();
+  const s = JSON.stringify(log);
+  write(local, LOG_KEY, s);
+  write(session, LOG_KEY, s);
+}
+export function logLoss(entry) {
+  const log = readLossLog();
+  log.push(entry);
+  writeLossLog(log);
+}
+export function markLossRestored(ms) {
+  const log = readLossLog();
+  if (!log.length) return;
+  log[log.length - 1].restored = ms;
+  writeLossLog(log);
+}
 
 // Remember a tier for the next visit, without reloading. Also kept in
 // window.name so it survives a reload of this frame when storage is blocked.
@@ -140,15 +227,7 @@ export function switchTier(tier, resume) {
   write(session, RESUME_KEY, JSON.stringify(r));
   writeWindowName({ tier, why: 'chosen', note: r.note, wanted: tier });
   // Drop a ?quality= override so the new choice can take effect.
-  try {
-    const u = new URL(location.href);
-    if (u.searchParams.has('quality')) {
-      u.searchParams.delete('quality');
-      location.replace(u.href);
-      return;
-    }
-  } catch (e) { /* fall back to reload */ }
-  location.reload();
+  reloadWithout('quality');
 }
 
 export function clearTierChoice() {
@@ -157,7 +236,8 @@ export function clearTierChoice() {
 
 export function noteLoss() {
   QUALITY.losses += 1;
-  write(session, LOSS_KEY + QUALITY.tier, String(QUALITY.losses));
+  QUALITY.tabLosses += 1;
+  write(session, LOSS_KEY, String(QUALITY.tabLosses));
   return QUALITY.losses;
 }
 

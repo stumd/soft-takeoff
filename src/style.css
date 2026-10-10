@@ -339,7 +339,15 @@ body.panel-open #banner { left: calc((100vw - var(--panel-w)) / 2); top: calc(10
   font-family: var(--display); font-style: italic; font-size: 16px;
 }
 .gfx.on { background: var(--ink); color: var(--cream); border-color: var(--ink); }
-.gfx-info { font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--muted); margin: 0 0 22px; overflow-wrap: anywhere; }
+.gfx-options .gfx-label { align-self: center; font-size: 15px; color: var(--ink-soft); min-width: 72px; }
+.gfx.small { padding: 5px 13px; font-size: 14.5px; }
+.gfx-info { font-family: var(--mono); font-size: 11px; line-height: 1.5; color: var(--muted); margin: 0 0 10px; overflow-wrap: anywhere; }
+#gfx-copy { margin-bottom: 22px; }
+.gfx-log {
+  display: block; width: 100%; box-sizing: border-box; margin: -12px 0 22px; padding: 8px 10px; resize: vertical;
+  font-family: var(--mono); font-size: 10.5px; line-height: 1.45; color: var(--ink-soft);
+  background: rgba(0, 0, 0, 0.04); border: 1px solid var(--line); border-radius: 8px;
+}
 kbd { font-family: var(--mono); font-size: 12px; background: #fff; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 5px; padding: 1px 6px; }
 
 #question { background: rgba(8, 9, 14, 0); transition: background 2.5s; pointer-events: none; }

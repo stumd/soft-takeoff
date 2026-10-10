@@ -54,6 +54,7 @@ Progress is saved in your browser. For development, `?scene=N` jumps straight to
 Everything is procedural, with no image or audio assets:
 
 - **Rendering:** [three.js](https://threejs.org) with an orthographic isometric camera, soft shadows and per-scene lighting presets. The distant city fades into a sky-matched mist, so far-off buildings rise out of haze. Static meshes are merged per material to keep draw calls low.
+- **Graphics tiers:** Full (desktop), Lite (phones: Lambert materials, no MSAA, lower resolution) and Text only (no WebGL). Real-time shadows are a separate switch: they are off by default on PowerVR GPUs (Pixel 10), whose drivers reset the WebGL context when shaders sample a shadow map, and off after any context loss; soft contact shadows stand in. Help → Graphics shows what was chosen and why, and can copy a diagnostics report including a log of recent context losses.
 - **Scene diffing:** each visit is a list of entities. Between visits the world works out what changed and rebuilds only that part. Furniture pops in, and towers rise out of the ground one at a time behind the time-passing veil.
 - **Audio:** generative WebAudio. A slow pad plays under an arpeggio that gets faster with every visit. There's weather and birdsong, the kettle's rising hiss, radio static, and a small waltz played through the radio's tiny speaker.
 - **Story:** all text lives in `src/story/scenes.js`. Entity states for each visit are in `src/story/states.js`.

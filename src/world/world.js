@@ -4,6 +4,7 @@ import { tweens, Ease } from '../engine/tween.js';
 import { G } from '../engine/stage.js';
 import { updateCityNight } from './city.js';
 import { MERGEABLE, mergeStatic } from './merge.js';
+import { blobRects, blobMesh } from './blobs.js';
 
 // Keeps the diorama in sync with a list of entity specs. Entities that are the
 // same between two scenes stay put; changed ones are swapped with a little
@@ -51,6 +52,8 @@ export class World {
     this.tickFn = (dt, t) => this.tick(dt, t);
     stage.onTick.push(this.tickFn);
     stage.onLate = (dt) => this.followCamera();
+    // Real-time shadows can be dropped mid-game (after a GPU loss).
+    stage.onShadowsOff = () => this.addBlobs();
     this._fwd = new THREE.Vector3();
     this._right = new THREE.Vector3();
     this._up = new THREE.Vector3();
@@ -86,6 +89,7 @@ export class World {
       return;
     }
     const obj = make(spec.p || {});
+    const rects = blobRects(spec.m, obj);
     if (MERGEABLE.has(spec.m)) mergeStatic(obj);
     else if (RISE_MODELS.has(spec.m)) {
       // Distant structures rise piece by piece, so merge within each piece.
@@ -111,7 +115,8 @@ export class World {
     obj.traverse((o) => {
       if (o.userData.tick) ticks.push(o);
     });
-    const ent = { id: spec.id, key: stableKey(spec), spec, obj, ticks, anchor, dead: false };
+    const ent = { id: spec.id, key: stableKey(spec), spec, obj, ticks, anchor, dead: false, rects, blob: null };
+    if (!this.stage.renderer.shadowMap.enabled) this._blob(ent);
     // If an old copy is still animating out, it lives on under a different key.
     this.entities.set(spec.id, ent);
 
@@ -199,6 +204,17 @@ export class World {
         });
       }
     }
+  }
+
+  // Soft contact shadows stand in for real ones when those are off.
+  _blob(ent) {
+    if (!ent.rects || ent.blob) return;
+    ent.blob = blobMesh(ent.rects);
+    ent.obj.add(ent.blob);
+  }
+
+  addBlobs() {
+    for (const e of this.entities.values()) this._blob(e);
   }
 
   // Add/replace a few entities and remove others, leaving everything else alone.

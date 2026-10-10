@@ -86,14 +86,15 @@ export class Stage {
     const r = new THREE.WebGLRenderer({ canvas, antialias: !lite, powerPreference: lite ? 'default' : 'high-performance' });
     this.maxRatio = lite ? 1.25 : 2;
     r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxRatio));
-    r.shadowMap.enabled = true;
-    r.shadowMap.type = lite ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
-    // On lite the shadow pass (a second draw of most of the scene) runs every third frame.
-    r.shadowMap.autoUpdate = !lite;
+    // Off on GPUs whose drivers reset the context when shaders sample a shadow
+    // map (see quality.js). Decided before any material compiles.
+    this.renderer = r;
+    this._applyShadowSettings(QUALITY.shadows);
+    // Shader error checks are synchronous GPU round-trips on every compile.
+    r.debug.checkShaderErrors = !!(import.meta.env && import.meta.env.DEV) || new URLSearchParams(location.search).has('debug');
     this._frame = 0;
     r.toneMapping = THREE.NeutralToneMapping;
     r.toneMappingExposure = 1.0;
-    this.renderer = r;
 
     this.scene = new THREE.Scene();
     this.scene.fog = new THREE.Fog(0xffffff, 130, 220);
@@ -131,12 +132,19 @@ export class Stage {
     window.addEventListener('resize', this._resize);
     // three.js listens first and calls preventDefault, which allows a restore.
     this.contextLost = false;
+    // For the loss log: frames drawn since this context began (or came back).
+    this.ctxFrames = 0;
+    this.ctxStart = performance.now();
     canvas.addEventListener('webglcontextlost', () => {
       this.contextLost = true;
       this.onContextLost && this.onContextLost();
     });
     canvas.addEventListener('webglcontextrestored', () => {
       this.contextLost = false;
+      // three.js replaces its shadow-map object on restore; set it up again.
+      this._applyShadowSettings(this.sun.castShadow);
+      this.ctxFrames = 0;
+      this.ctxStart = performance.now();
       this.onContextRestored && this.onContextRestored();
     });
     // Fired when the browser refuses a new context, e.g. after repeated GPU losses.
@@ -164,7 +172,7 @@ export class Stage {
 
   _makeLights() {
     const sun = new THREE.DirectionalLight(0xffffff, 2);
-    sun.castShadow = true;
+    sun.castShadow = QUALITY.shadows;
     const sm = QUALITY.lite ? 1024 : 2048;
     sun.shadow.mapSize.set(sm, sm);
     const sc = sun.shadow.camera;
@@ -375,7 +383,7 @@ export class Stage {
     if (fps < 42 && r > 1) {
       this.renderer.setPixelRatio(Math.max(1, r - 0.35));
       this._resize();
-    } else if (fps < 24 && this.sun.shadow.mapSize.x > 512) {
+    } else if (fps < 24 && this.sun.castShadow && this.sun.shadow.mapSize.x > 512) {
       const n = this.sun.shadow.mapSize.x / 2;
       this.sun.shadow.mapSize.set(n, n);
       this.sun.shadow.map?.dispose();
@@ -426,21 +434,32 @@ export class Stage {
     requestAnimationFrame(() => { if (id === this._warmId) canvas.classList.remove('warming'); });
   }
 
+  _applyShadowSettings(on) {
+    const sm = this.renderer.shadowMap;
+    sm.enabled = on;
+    sm.type = QUALITY.lite ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
+    // On lite the shadow pass (a second draw of most of the scene) runs every third frame.
+    sm.autoUpdate = on && !QUALITY.lite;
+    sm.needsUpdate = on;
+  }
+
+  // Stop drawing and sampling shadow maps. Called while the context is lost,
+  // so every program is rebuilt without the shadow code when it comes back.
+  disableShadows() {
+    this._applyShadowSettings(false);
+    this.sun.castShadow = false;
+    // The old target belonged to the lost context; just let it go.
+    this.sun.shadow.map = null;
+    this.onShadowsOff && this.onShadowsOff();
+  }
+
   // After a restored context, ask less of the GPU than before.
   lighten() {
     this.maxRatio = 1;
     this.renderer.setPixelRatio(1);
     this._resize();
     if (this._adaptState) this._adaptState.settled = true;
-    const sm = this.sun.shadow;
-    if (sm.mapSize.x > 1024) {
-      sm.mapSize.set(1024, 1024);
-      // The old target belonged to the lost context; just let it go.
-      sm.map = null;
-    }
-    this.renderer.shadowMap.autoUpdate = false;
-    this.renderer.shadowMap.needsUpdate = true;
-    this._shadowEvery = 4;
+    if (this.sun.castShadow) this.disableShadows();
   }
 
   stop() {
@@ -459,14 +478,16 @@ export class Stage {
       for (const f of this.onTick) f(dt, G.time);
       this._updateCamera(dt);
       if (this.onLate) this.onLate(dt);
-      if (!this.renderer.shadowMap.autoUpdate && this._frame++ % (this._shadowEvery || 3) === 0) this.renderer.shadowMap.needsUpdate = true;
+      const r = this.renderer;
+      if (r.shadowMap.enabled && !r.shadowMap.autoUpdate && this._frame++ % 3 === 0) r.shadowMap.needsUpdate = true;
       if (!this.hold && !this.contextLost) {
         // The context can be gone a frame before the event arrives.
-        if (this.renderer.getContext().isContextLost()) {
+        if (r.getContext().isContextLost()) {
           this.contextLost = true;
           document.body.classList.add('gl-lost');
         } else {
-          this.renderer.render(this.scene, this.camera);
+          r.render(this.scene, this.camera);
+          this.ctxFrames++;
         }
       }
     };
