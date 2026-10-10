@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Soft Takeoff</title>
+<meta name="description" content="An isometric story about living through the singularity, one kitchen at a time." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;700&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,500;0,9..144,700;1,9..144,300;1,9..144,400&family=IBM+Plex+Mono:wght@400;500&family=Newsreader:ital,opsz,wght@0,6..72,400;0,6..72,500;1,6..72,400&family=Inter:wght@800;900&display=swap" rel="stylesheet" />
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%231b1f2e'/%3E%3Cpath d='M20 46h24l-2-20H22z' fill='%23f4f1ea'/%3E%3Cpath d='M22 26c0-6 20-6 20 0' fill='none' stroke='%23f4f1ea' stroke-width='3'/%3E%3Cpath d='M44 32c6 0 6 8 0 8' fill='none' stroke='%23f4f1ea' stroke-width='3'/%3E%3Cpath d='M28 18c0-4 4-4 4-8M36 18c0-4 4-4 4-8' fill='none' stroke='%23e8a13a' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E" />
+<link rel="stylesheet" href="./src/style.css" />
+</head>
+<body>
+<div id="app">
+  <canvas id="gl" aria-hidden="true"></canvas>
+  <div id="markers" aria-label="Things to look at"></div>
+  <div id="tooltip" role="tooltip"></div>
+
+  <header id="hud" class="hidden">
+    <div class="hud-card">
+      <div id="hud-day" class="hud-day"></div>
+      <div class="hud-row"><span id="hud-time" class="hud-time"></span><span id="hud-title" class="hud-title"></span></div>
+    </div>
+  </header>
+
+  <div id="tools" class="hidden">
+    <button id="btn-sound" class="tool" aria-label="Toggle sound" title="Sound (M)">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" fill="currentColor"/><path class="wave" d="M16 8.5c1.5 1 1.5 6 0 7M18.5 6c3 2.5 3 9.5 0 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path class="mute" d="M16 9l5 6M21 9l-5 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+    </button>
+    <button id="btn-help" class="tool" aria-label="How to play" title="How to play (H)">?</button>
+  </div>
+
+  <footer id="bottom" class="hidden">
+    <div id="timeline" aria-label="Timeline">
+      <div class="tl-track">
+        <div class="tl-line"></div>
+        <div id="tl-ticks"></div>
+        <div id="tl-dots"></div>
+      </div>
+      <div class="tl-break" aria-hidden="true">⋯</div>
+      <div class="tl-end"><div id="tl-end-dot" class="tl-dot future" data-i="9"></div><span>2051</span></div>
+    </div>
+    <div id="advance-wrap">
+      <div id="noticed"></div>
+      <button id="btn-advance" class="advance">Let time pass <span aria-hidden="true">→</span></button>
+    </div>
+  </footer>
+
+  <div id="banner" class="hidden" role="status"></div>
+  <div id="subtitle" aria-live="polite"></div>
+
+  <aside id="panel" aria-hidden="true" aria-labelledby="panel-title">
+    <button id="panel-close" class="panel-close" aria-label="Close">×</button>
+    <div class="panel-kicker" id="panel-kicker"></div>
+    <h2 id="panel-title"></h2>
+    <div id="panel-body" class="panel-body"></div>
+    <div id="panel-foot" class="panel-foot"></div>
+  </aside>
+
+  <div id="overlay" class="overlay">
+    <div class="ov-inner">
+      <div id="ov-gap" class="ov-gap"></div>
+      <div id="ov-date" class="ov-date"></div>
+      <p id="ov-epigraph" class="ov-epigraph"></p>
+      <div id="ov-hint" class="ov-hint">click to continue</div>
+    </div>
+  </div>
+
+  <section id="title" class="screen">
+    <div class="title-inner">
+      <p class="title-kicker">a story in ten visits</p>
+      <h1>Soft Takeoff</h1>
+      <p class="title-tag">The world is about to get very fast.<br />The kettle still takes three minutes.</p>
+      <div class="title-actions">
+        <button id="btn-begin" class="big">Begin</button>
+        <button id="btn-continue" class="big ghost hidden">Continue</button>
+      </div>
+      <p class="title-note">Best with sound &middot; about 30 minutes &middot; look closely at things</p>
+    </div>
+  </section>
+
+  <section id="help" class="screen modal hidden" role="dialog" aria-labelledby="help-title">
+    <div class="help-card">
+      <h2 id="help-title">How to play</h2>
+      <ul>
+        <li><b>Look closer.</b> Click glowing markers, or anything that lights up under your cursor.</li>
+        <li><b>Move around.</b> Drag to pan, scroll or pinch to zoom, double-click to reset.</li>
+        <li><b>Let time pass</b> when you’re ready. You don’t have to see everything, but things are only here once.</li>
+        <li>Visited moments stay on the timeline. Click a dot to go back.</li>
+        <li>Keys: <kbd>Space</kbd> let time pass &middot; <kbd>Esc</kbd> close &middot; <kbd>M</kbd> sound</li>
+      </ul>
+      <button id="help-close" class="big">Back</button>
+    </div>
+  </section>
+
+  <section id="question" class="screen hidden" aria-live="polite">
+    <div class="q-inner">
+      <div id="q-lines"></div>
+      <h2 id="q-text"></h2>
+      <button id="q-next" class="big ghost hidden">…</button>
+    </div>
+  </section>
+
+  <section id="ending" class="screen hidden" aria-live="polite">
+    <div class="end-inner">
+      <div id="end-lines"></div>
+      <div id="end-final" class="hidden">
+        <h1>Soft Takeoff</h1>
+        <p class="end-credits">Everything here is made from code: no images, no recordings.<br />Thank you for being here.</p>
+        <div class="title-actions">
+          <button id="btn-wander" class="big">Wander through time</button>
+          <button id="btn-restart" class="big ghost">Begin again</button>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,19 @@
+{
+  "name": "soft-takeoff",
+  "private": true,
+  "version": "1.0.0",
+  "description": "An isometric narrative game about living through the singularity, one kitchen at a time.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "build:single": "vite build --mode single",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "vite": "^6.4.4"
+  }
+}
