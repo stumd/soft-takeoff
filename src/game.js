@@ -353,6 +353,7 @@ export class Game {
 
   closePanel() {
     const p = $('panel');
+    if (p.contains(document.activeElement)) document.activeElement.blur();
     p.classList.remove('open');
     p.setAttribute('aria-hidden', 'true');
     document.body.classList.remove('panel-open');
@@ -585,10 +586,11 @@ export class Game {
     qt.textContent = '';
     await wait(0.6);
     q.classList.add('hidden');
-    this.stage.cam.extraZoom = 1;
-    this.stage.cam.extraPanY = 0;
     this.state = 'scene';
     this.busy = false;
+    const cam = this.stage.cam;
+    const z0 = cam.extraZoom, p0 = cam.extraPanY;
+    tweens.add({ dur: 2.2, delay: 0.6, ease: Ease.inOut, update: (k) => { cam.extraZoom = z0 + (1 - z0) * k; cam.extraPanY = p0 * (1 - k); } });
     await this.transitionTo(SCENES.length - 1);
     audio.unduck(4);
   }

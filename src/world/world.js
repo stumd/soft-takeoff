@@ -3,6 +3,7 @@ import { MODELS, SKY_MODELS, RISE_MODELS, FADE_MODELS } from './models.js';
 import { tweens, Ease } from '../engine/tween.js';
 import { G } from '../engine/stage.js';
 import { updateCityNight } from './city.js';
+import { MERGEABLE, mergeStatic } from './merge.js';
 
 // Keeps the diorama in sync with a list of entity specs. Entities that are the
 // same between two scenes stay put; changed ones are swapped with a little
@@ -60,6 +61,12 @@ export class World {
       return;
     }
     const obj = make(spec.p || {});
+    if (MERGEABLE.has(spec.m)) mergeStatic(obj);
+    else if (RISE_MODELS.has(spec.m)) {
+      // Distant structures rise piece by piece, so merge within each piece.
+      if (obj.userData.stagger) for (const c of obj.children) { if (!c.userData.tick) mergeStatic(c); }
+      else if (!obj.userData.tick) mergeStatic(obj);
+    }
     if (spec.at) obj.position.set(spec.at[0], spec.at[1] || 0, spec.at[2] || 0);
     if (spec.ry) obj.rotation.y = spec.ry;
     if (spec.s) obj.scale.setScalar(spec.s);

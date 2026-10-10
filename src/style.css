@@ -162,8 +162,9 @@ body.busy .marker { opacity: 0 !important; pointer-events: none !important; }
 .say .line { font-family: var(--display); font-size: 20px; line-height: 1.4; font-weight: 400; }
 .say.pip .line { color: var(--amber-deep); }
 
-.reveal { font-family: var(--display); font-weight: 300; font-size: 20px; line-height: 1.55; color: #8a4e10; margin: 0 0 1em; }
-.panel-body .reveal { animation-duration: 1.6s; }
+.panel-body p.reveal { font-family: var(--display); font-weight: 300; font-size: 20.5px; line-height: 1.55; color: #8a4e10; margin: 0 0 1em; }
+.panel-body p.reveal em { font-style: italic; }
+.panel-body .reveal { animation-duration: 1.8s; }
 
 .panel-foot { margin-top: 26px; display: flex; gap: 10px; flex-wrap: wrap; }
 .panel-foot button {
@@ -178,7 +179,6 @@ body.busy .marker { opacity: 0 !important; pointer-events: none !important; }
   background: linear-gradient(160deg, #fbfaf6, #ebe7de); box-shadow: inset 0 0 0 1px rgba(0,0,0,0.06), 0 8px 24px rgba(60, 40, 20, 0.12);
   display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px;
 }
-.fridge::after { content: ''; position: absolute; right: 12px; top: 22%; width: 6px; height: 34%; border-radius: 4px; background: #d6d1c6; }
 .fnote {
   position: relative; padding: 12px 12px 14px; font-family: var(--hand); font-size: 21px; line-height: 1.05; color: #2a2620;
   box-shadow: 0 3px 8px rgba(0,0,0,0.12); white-space: pre-line; min-height: 70px;
@@ -215,14 +215,19 @@ body.busy .marker { opacity: 0 !important; pointer-events: none !important; }
 
 /* ---------------------------------------------------------------- banner + subtitles */
 #banner {
-  position: absolute; top: 22px; left: 50%; transform: translateX(-50%); z-index: 6; background: var(--cream); color: var(--ink);
+  position: absolute; top: 22px; left: 50%; transition: left 0.5s cubic-bezier(.2,.8,.2,1); transform: translateX(-50%); z-index: 6; background: var(--cream); color: var(--ink);
   font-family: var(--display); font-style: italic; font-size: 19px; padding: 12px 22px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,0.25);
   max-width: 90vw; text-align: center;
 }
+body.panel-open #banner { left: calc((100vw - var(--panel-w)) / 2); }
 #subtitle {
-  position: absolute; left: 50%; bottom: 120px; transform: translateX(-50%); z-index: 6; width: min(760px, 90vw); text-align: center;
+  position: absolute; left: 50%; bottom: 64px; transform: translateX(-50%); z-index: 6; width: min(760px, 90vw); text-align: center;
   font-family: var(--display); font-weight: 300; font-size: 23px; line-height: 1.4; color: #fff; pointer-events: none;
-  text-shadow: 0 2px 18px rgba(0, 0, 0, 0.7), 0 0 2px rgba(0,0,0,0.6);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.6);
+}
+#subtitle:not(:empty) {
+  background: rgba(12, 14, 22, 0.55); border-radius: 18px; padding: 14px 26px 16px;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
 }
 #subtitle .src { display: block; font-family: var(--mono); font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; opacity: 0.8; margin-bottom: 6px; }
 #subtitle .s { display: inline-block; animation: sub 0.5s both; }
@@ -305,7 +310,7 @@ kbd { font-family: var(--mono); font-size: 12px; background: #fff; border: 1px s
   #panel.open { transform: translateY(0); }
   #panel h2 { font-size: 27px; }
   .panel-body p { font-size: 17.5px; }
-  #subtitle { bottom: 150px; font-size: 19px; }
+  #subtitle { bottom: 24px; font-size: 18px; }
 }
 
 @media (prefers-reduced-motion: reduce) {

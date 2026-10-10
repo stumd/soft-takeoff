@@ -284,7 +284,7 @@ export class Stage {
   frustumH() {
     const aspect = this.width / this.height;
     // On narrow screens make sure the whole diorama still fits horizontally.
-    const base = Math.max(this.view.frustum, 30 / aspect);
+    const base = Math.max(this.view.frustum, 27 / aspect);
     return base / (this.cam.zoom * this.cam.extraZoom);
   }
 
@@ -333,10 +333,35 @@ export class Stage {
     this.sun.position.copy(this.sunTarget.position).addScaledVector(sd, 60);
   }
 
+  // Drop the resolution a little on devices that can't keep up.
+  _adapt(raw) {
+    const a = (this._adaptState ||= { t: 0, frames: 0, settled: false });
+    if (a.settled || document.hidden) return;
+    a.t += raw;
+    a.frames++;
+    if (a.t < 2.5) return;
+    const fps = a.frames / a.t;
+    a.t = 0;
+    a.frames = 0;
+    const r = this.renderer.getPixelRatio();
+    if (fps < 42 && r > 1) {
+      this.renderer.setPixelRatio(Math.max(1, r - 0.35));
+      this._resize();
+    } else if (fps < 24 && this.sun.shadow.mapSize.x > 1024) {
+      this.sun.shadow.mapSize.set(1024, 1024);
+      this.sun.shadow.map?.dispose();
+      this.sun.shadow.map = null;
+    } else {
+      a.settled = fps >= 42 || r <= 1;
+    }
+  }
+
   start() {
     const loop = () => {
       requestAnimationFrame(loop);
-      const dt = Math.min(this.maxDt, this.clock.getDelta());
+      const raw = this.clock.getDelta();
+      if (this.maxDt < 1) this._adapt(raw);
+      const dt = Math.min(this.maxDt, raw);
       G.time += dt;
       tweens.tick(dt);
       for (const f of this.onTick) f(dt, G.time);

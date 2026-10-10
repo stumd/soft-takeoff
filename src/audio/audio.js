@@ -3,6 +3,7 @@
 // with every visit, the way the world does.
 
 const midi = (n) => 440 * Math.pow(2, (n - 69) / 12);
+const MASTER = 2.0;
 
 // Chords as MIDI notes. Each mood has a progression, a pad brightness,
 // an arpeggio rate (notes per second), and an ambience recipe.
@@ -49,18 +50,14 @@ export class AudioEngine {
     const ctx = new Ctx();
     this.ctx = ctx;
     this.master = ctx.createGain();
-    this.master.gain.value = this.muted ? 0 : 0.8;
+    this.master.gain.value = this.muted ? 0 : MASTER;
     const comp = ctx.createDynamicsCompressor();
     comp.threshold.value = -18;
     comp.ratio.value = 3;
     this.master.connect(comp).connect(ctx.destination);
 
-    this.reverb = ctx.createConvolver();
-    this.reverb.buffer = this._impulse(4.2, 2.6);
-    const revGain = ctx.createGain();
-    revGain.gain.value = 0.55;
-    this.reverb.connect(revGain).connect(this.master);
-
+    // Music: voices -> musicIn -> (dry filter + reverb send) -> music bus (duckable).
+    const ir = this._impulse(4.2, 2.6);
     this.music = ctx.createGain();
     this.music.gain.value = 0.42;
     this.music.connect(this.master);
@@ -69,13 +66,25 @@ export class AudioEngine {
     this.musicFilter.frequency.value = 20000;
     this.musicIn = ctx.createGain();
     this.musicIn.connect(this.musicFilter).connect(this.music);
+    this.reverb = ctx.createConvolver();
+    this.reverb.buffer = ir;
+    const revSend = ctx.createGain();
+    revSend.gain.value = 0.45;
+    this.musicIn.connect(revSend).connect(this.reverb).connect(this.music);
 
     this.ambBus = ctx.createGain();
     this.ambBus.gain.value = 0.5;
     this.ambBus.connect(this.master);
+
+    // Effects have their own room, so they aren't silenced with the music.
     this.sfx = ctx.createGain();
     this.sfx.gain.value = 0.7;
     this.sfx.connect(this.master);
+    this.sfxVerb = ctx.createConvolver();
+    this.sfxVerb.buffer = ir;
+    const sfxVerbOut = ctx.createGain();
+    sfxVerbOut.gain.value = 0.35;
+    this.sfxVerb.connect(sfxVerbOut).connect(this.master);
 
     // Ping-pong-ish delay for the arpeggio.
     this.delay = ctx.createDelay(1.5);
@@ -102,7 +111,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     this.master.gain.cancelScheduledValues(t);
-    this.master.gain.setTargetAtTime(m ? 0 : 0.8, t, 0.15);
+    this.master.gain.setTargetAtTime(m ? 0 : MASTER, t, 0.15);
   }
 
   _impulse(seconds, decay) {
@@ -338,7 +347,6 @@ export class AudioEngine {
       }
       filt.connect(g).connect(pan);
       pan.connect(this.musicIn);
-      pan.connect(this.reverb);
     }
     // a soft bass under it
     const b = ctx.createOscillator();
@@ -370,18 +378,21 @@ export class AudioEngine {
     g.gain.linearRampToValueAtTime(0.07 * vel, t + 0.006);
     g.gain.exponentialRampToValueAtTime(0.0008, t + 0.9);
     const pan = ctx.createStereoPanner();
-    pan.pan.value = (Math.random() - 0.5) * 1.2;
+    pan.pan.value = dest ? 0 : (Math.random() - 0.5) * 1.2;
     car.connect(g).connect(pan);
-    pan.connect(dest || this.musicIn);
-    pan.connect(this.delay);
-    pan.connect(this.reverb);
+    if (dest) {
+      pan.connect(dest);
+    } else {
+      pan.connect(this.musicIn);
+      pan.connect(this.delay);
+    }
     car.start(t);
     mod.start(t);
     car.stop(t + 1);
     mod.stop(t + 1);
   }
 
-  _bell(n, t) {
+  _bell(n, t, dest) {
     const ctx = this.ctx;
     const f = midi(n);
     for (const [mult, amp, dec] of [[1, 0.05, 3.5], [2.76, 0.018, 1.6], [5.4, 0.008, 0.8]]) {
@@ -392,8 +403,7 @@ export class AudioEngine {
       g.gain.linearRampToValueAtTime(amp, t + 0.01);
       g.gain.exponentialRampToValueAtTime(0.0005, t + dec);
       o.connect(g);
-      g.connect(this.musicIn);
-      g.connect(this.reverb);
+      g.connect(dest || this.musicIn);
       o.start(t);
       o.stop(t + dec + 0.1);
     }
@@ -474,7 +484,7 @@ export class AudioEngine {
     g.gain.linearRampToValueAtTime(0.35, t + dur * 0.5);
     g.gain.linearRampToValueAtTime(0, t + dur);
     s.connect(f).connect(g).connect(this.sfx);
-    g.connect(this.reverb);
+    g.connect(this.sfxVerb);
     setTimeout(() => s.stop(), dur * 1000 + 200);
     // a rising shimmer of plucks: time rushing
     const ch = this.currentChord || C.Fmaj7;
@@ -515,9 +525,9 @@ export class AudioEngine {
     bp.frequency.linearRampToValueAtTime(2600, t + dur);
     const g = ctx.createGain();
     g.gain.setValueAtTime(0, t);
-    g.gain.linearRampToValueAtTime(0.12, t + dur * 0.3);
-    g.gain.linearRampToValueAtTime(0.3, t + dur * 0.92);
-    g.gain.linearRampToValueAtTime(0.42, t + dur);
+    g.gain.linearRampToValueAtTime(0.16, t + dur * 0.3);
+    g.gain.linearRampToValueAtTime(0.45, t + dur * 0.92);
+    g.gain.linearRampToValueAtTime(0.65, t + dur);
     s.connect(bp).connect(g).connect(this.sfx);
     // bubbles getting busier
     let alive = true;
@@ -580,9 +590,9 @@ export class AudioEngine {
     radio.Q.value = 0.45;
     const out = ctx.createGain();
     out.gain.setValueAtTime(0, t0);
-    out.gain.linearRampToValueAtTime(1.1, t0 + 1.5);
+    out.gain.linearRampToValueAtTime(0.55, t0 + 1.5);
     radio.connect(out).connect(this.sfx);
-    out.connect(this.reverb);
+    out.connect(this.sfxVerb);
     // A simple tune in D major, waltz time.
     const beat = 0.5;
     const tune = [
@@ -619,8 +629,12 @@ export class AudioEngine {
   pipChime() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
-    this._bell(81, t);
-    this._bell(88, t + 0.18);
+    const g = this.ctx.createGain();
+    g.gain.value = 1.4;
+    g.connect(this.sfx);
+    g.connect(this.sfxVerb);
+    this._bell(81, t, g);
+    this._bell(88, t + 0.18, g);
   }
 }
 
