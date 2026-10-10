@@ -26,3 +26,16 @@ if (m) {
 mkdirSync('dist-single', { recursive: true });
 writeFileSync(join('dist-single', 'index.html'), html);
 console.log(`dist-single/index.html — ${(html.length / 1024).toFixed(0)} KB`);
+
+// Optional: a fragment for hosts that supply their own <html>/<head>/<body>.
+const fragOut = process.argv[2];
+if (fragOut) {
+  const pick = (re) => (html.match(re) || [])[0] || '';
+  const title = pick(/<title>[\s\S]*?<\/title>/);
+  const fonts = (html.match(/<link[^>]*https:\/\/fonts\.(?:googleapis|gstatic)\.com[^>]*>/g) || []).join('\n');
+  const styles = (html.match(/<style>[\s\S]*?<\/style>/g) || []).join('\n');
+  const body = html.match(/<body[^>]*>([\s\S]*)<\/body>/)[1];
+  const frag = [title, fonts, styles, body].join('\n');
+  writeFileSync(fragOut, frag);
+  console.log(`${fragOut} — ${(frag.length / 1024).toFixed(0)} KB`);
+}
