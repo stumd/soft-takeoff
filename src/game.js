@@ -6,6 +6,7 @@ import { renderBlocks, inline } from './ui/panel.js';
 import { audio } from './audio/audio.js';
 import { tweens, tween, wait, Ease, clamp } from './engine/tween.js';
 import { G } from './engine/stage.js';
+import { cloneEnv } from './engine/env.js';
 import { QUALITY, switchTier, rememberTier, noteLoss, TIER_LABELS } from './engine/quality.js';
 import { NullStage, NullWorld } from './engine/nullstage.js';
 
@@ -282,13 +283,12 @@ export class Game {
     if (i >= 0) ticks.splice(i, 1);
     const ns = new NullStage(old.renderer.domElement);
     ns.onTick = ticks;
-    ns.env = old.env;
+    // Take over the current lighting, and finish any change that was under way.
+    const changing = old._envTween && !old._envTween.dead;
+    if (old._envTween) tweens.kill(old._envTween);
+    ns.env = cloneEnv(old.env);
     ns.applyEnv();
-    if (old._envTween) {
-      // Let an in-progress lighting change finish on the new stage.
-      const target = this.scene ? this.scene.env : 'dusk';
-      ns.setEnv(target, 1.5);
-    }
+    if (changing && old.envTarget) ns.setEnv(old.envTarget, 1.5);
     ns.cam = old.cam;
     const nw = new NullWorld(ns);
     this.stage = ns;
@@ -666,7 +666,7 @@ export class Game {
         if (!song) audio.setArpRate(3 + Math.pow(Math.min(1, t / 78), 1.6) * 13);
         while (step < KETTLE_STEPS.length && t >= KETTLE_STEPS[step].at) {
           const s = KETTLE_STEPS[step++];
-          world.patch(s.set || [], s.remove || [], { dur: 2.6, spread: 3.2, delay: 0 });
+          this.world.patch(s.set || [], s.remove || [], { dur: 2.6, spread: 3.2, delay: 0 });
         }
         while (line < KETTLE_SCRIPT.length && t >= KETTLE_SCRIPT[line].t) {
           const l = KETTLE_SCRIPT[line++];
@@ -674,7 +674,7 @@ export class Game {
         }
         if (!envShifted && t > 46) {
           envShifted = true;
-          stage.setEnv('newMorning', 24);
+          this.stage.setEnv('newMorning', 24);
         }
         if (!song && t > 80) {
           song = audio.song();

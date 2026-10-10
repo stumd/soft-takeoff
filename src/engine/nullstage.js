@@ -29,6 +29,7 @@ export class NullStage {
   }
 
   setEnv(name, dur = 2.5) {
+    this.envTarget = name;
     const to = typeof name === 'string' ? ENV[name] : name;
     if (this._envTween) tweens.kill(this._envTween);
     if (dur <= 0.02) {

@@ -190,6 +190,7 @@ export class Stage {
   }
 
   setEnv(name, dur = 2.5) {
+    this.envTarget = name;
     const to = typeof name === 'string' ? ENV[name] : name;
     if (!to) throw new Error('unknown env ' + name);
     if (this._envTween) tweens.kill(this._envTween);
