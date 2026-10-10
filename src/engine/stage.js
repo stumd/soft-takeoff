@@ -370,6 +370,7 @@ export class Stage {
       this.sun.shadow.map = null;
     } else {
       a.settled = fps >= 42 || r <= 1;
+      if (a.settled && fps < 14 && this.onSlow) this.onSlow(fps);
     }
   }
 

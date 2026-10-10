@@ -61,6 +61,9 @@ export class Game {
     stage.onTick.push((dt, t) => this._frame(dt, t));
     stage.onContextLost = () => this._contextLost();
     stage.onContextRestored = () => this._contextRestored();
+    stage.onSlow = () => {
+      if (!QUALITY.text) this.toast(`Running slowly? Try ${QUALITY.full ? 'Lite or ' : ''}Text only under ? → Graphics.`, 7000);
+    };
     this._buildGraphicsSettings();
   }
 
