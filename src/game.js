@@ -157,7 +157,7 @@ export class Game {
     // The last visits are days apart: push them apart just enough to stay
     // clickable, without letting any run off the end of the track.
     for (let i = 1; i < n; i++) px[i] = Math.max(px[i], px[i - 1] + gap);
-    px[n - 1] = Math.min(px[n - 1], w - 4);
+    px[n - 1] = Math.min(px[n - 1], w - 7.5);
     for (let i = n - 2; i >= 0; i--) px[i] = Math.min(px[i], px[i + 1] - gap);
     for (let i = 0; i < n; i++) this.dots[i].style.left = Math.max(0, px[i]) + 'px';
   }
@@ -270,22 +270,32 @@ export class Game {
     // and don't count them against this device.
     if (document.hidden) {
       this._lossWhileHidden = true;
-      if (!this._onVisible) {
-        this._onVisible = () => {
-          if (document.hidden) return;
-          document.removeEventListener('visibilitychange', this._onVisible);
-          this._onVisible = null;
-          if (this.stage.contextLost) this._startRestoreDeadline();
-        };
-        document.addEventListener('visibilitychange', this._onVisible);
-      }
+      this._watchVisibility();
       return;
     }
     this._lossWhileHidden = false;
     const n = noteLoss();
     if (n >= 2) return this.switchToText('lost-twice');
     if (this.state !== 'title') this.toast('The graphics stopped. Restarting them…', 0);
+    this._watchVisibility();
     this._startRestoreDeadline();
+  }
+
+  // While a lost context waits for its restore, only count down when the page
+  // is visible: browsers don't restore a hidden page's context.
+  _watchVisibility() {
+    if (this._onVisible) return;
+    this._onVisible = () => {
+      if (document.hidden) clearTimeout(this._lossTimer);
+      else if (this.stage.contextLost) this._startRestoreDeadline();
+    };
+    document.addEventListener('visibilitychange', this._onVisible);
+  }
+
+  _stopWatchingVisibility() {
+    if (!this._onVisible) return;
+    document.removeEventListener('visibilitychange', this._onVisible);
+    this._onVisible = null;
   }
 
   _startRestoreDeadline() {
@@ -297,10 +307,7 @@ export class Game {
     if (QUALITY.text) return;
     clearTimeout(this._lossTimer);
     this._lossTimer = null;
-    if (this._onVisible) {
-      document.removeEventListener('visibilitychange', this._onVisible);
-      this._onVisible = null;
-    }
+    this._stopWatchingVisibility();
     // A GPU crash can also wipe 2D canvases: repaint every texture.
     repaintAllTextures();
     if (this._lossWhileHidden) {
@@ -324,10 +331,7 @@ export class Game {
     if (QUALITY.text) return;
     const prev = QUALITY.tier;
     clearTimeout(this._lossTimer);
-    if (this._onVisible) {
-      document.removeEventListener('visibilitychange', this._onVisible);
-      this._onVisible = null;
-    }
+    this._stopWatchingVisibility();
     const old = this.stage;
     const oldWorld = this.world;
     old.stop && old.stop();

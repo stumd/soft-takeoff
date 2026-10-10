@@ -393,19 +393,37 @@ export class Stage {
   // stall the GPU (a classic trigger for mobile context loss).
   async warmup(timeoutMs = 4000) {
     const canvas = this.renderer.domElement;
+    const r = this.renderer;
+    const id = (this._warmId = (this._warmId || 0) + 1);
     this.hold = true;
     canvas.classList.add('warming');
+    // compileAsync polls the materials compile() returned; entities leaving the
+    // scene can dispose some of them mid-poll, which makes three throw. Drop
+    // those from the set as they go.
+    const compile = r.compile;
+    r.compile = (...args) => {
+      const set = compile.apply(r, args);
+      for (const m of set) {
+        const drop = () => { set.delete(m); m.removeEventListener('dispose', drop); };
+        m.addEventListener('dispose', drop);
+      }
+      return set;
+    };
     try {
       this._updateCamera(0);
       await Promise.race([
-        this.renderer.compileAsync(this.scene, this.camera),
-        new Promise((r) => setTimeout(r, timeoutMs)),
+        r.compileAsync(this.scene, this.camera).catch(() => {}),
+        new Promise((res) => setTimeout(res, timeoutMs)),
       ]);
     } catch (e) {
       /* fall through: render compiles synchronously */
+    } finally {
+      r.compile = compile;
     }
+    // A newer warm-up (e.g. after a context restore) owns the hold now.
+    if (id !== this._warmId) return;
     this.hold = false;
-    requestAnimationFrame(() => canvas.classList.remove('warming'));
+    requestAnimationFrame(() => { if (id === this._warmId) canvas.classList.remove('warming'); });
   }
 
   // After a restored context, ask less of the GPU than before.

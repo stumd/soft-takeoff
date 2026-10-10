@@ -65,6 +65,10 @@ body.panel-open #tools { right: calc(var(--panel-w) + 18px); }
   display: flex; align-items: flex-end; gap: 18px; pointer-events: none; transition: opacity 0.6s, right 0.5s;
 }
 body.panel-open #bottom { right: var(--panel-w); }
+/* Too narrow beside an open panel: let the timeline step aside rather than collapse. */
+@media (max-width: 1100px) and (min-width: 721px) {
+  body.panel-open #timeline { visibility: hidden; }
+}
 #timeline {
   pointer-events: auto; flex: 1; max-width: 760px; display: flex; align-items: center; gap: 12px;
   background: var(--glass); border: 1px solid var(--glass-line); border-radius: 14px; padding: 12px 18px 10px;
@@ -75,7 +79,7 @@ body.panel-open #bottom { right: var(--panel-w); }
 .tl-tick { position: absolute; top: 7px; width: 1px; height: 9px; background: rgba(255, 255, 255, 0.35); }
 .tl-tick span { position: absolute; top: 12px; left: 50%; transform: translateX(-50%); font-family: var(--mono); font-size: 10px; opacity: 0.6; letter-spacing: 0.06em; }
 .tl-dot {
-  position: absolute; top: 6px; width: 11px; height: 11px; margin-left: -5.5px; border-radius: 50%;
+  position: absolute; top: 4px; width: 15px; height: 15px; margin-left: -7.5px; border-radius: 50%; box-sizing: border-box; padding: 0;
   background: var(--cream); border: 2px solid rgba(16, 18, 28, 0.6); cursor: pointer; transition: transform 0.2s, background 0.3s;
   pointer-events: auto;
 }
@@ -251,9 +255,12 @@ body.sky-light #rl-title { color: var(--ink); text-shadow: 0 2px 24px rgba(255, 
 body.sky-light .rl-item:not(.special), body.sky-light .hud-card, body.sky-light #noticed,
 body.sky-light #timeline, body.sky-light .tool { background: rgba(16, 18, 28, 0.7); }
 body.tier-text .only-3d, body:not(.tier-text) .only-text { display: none; }
+/* In text mode the list's own heading asks the question. */
+body.tier-text #banner { display: none !important; }
 body.tier-text #markers, body.tier-text #tooltip { display: none; }
 
 #toast {
+  width: max-content;
   position: absolute; left: 50%; top: calc(86px + env(safe-area-inset-top, 0px)); transform: translate(-50%, -8px); z-index: 25;
   background: var(--cream); color: var(--ink); font-family: var(--display); font-style: italic; font-size: 17px;
   padding: 10px 18px; border-radius: 999px; box-shadow: 0 10px 30px rgba(0,0,0,0.25); max-width: 90vw; text-align: center;
@@ -382,4 +389,23 @@ kbd { font-family: var(--mono); font-size: 12px; background: #fff; border: 1px s
 @media (prefers-reduced-motion: reduce) {
   .marker::after, .advance.ready { animation: none; }
   .panel-body > * { animation: none; }
+}
+
+/* Short screens (landscape phones): a tighter list that still shows whole items. */
+@media (max-height: 480px) {
+  #roomlist { top: calc(66px + env(safe-area-inset-top, 0px)); bottom: calc(66px + env(safe-area-inset-bottom, 0px)); gap: 8px; }
+  #rl-title { font-size: 26px; }
+  #rl-items { gap: 6px; }
+  #rl-items .rl-item { font-size: 15px; padding: 6px 12px; }
+  #hud { top: 8px; }
+  .hud-card { padding: 6px 12px; }
+  .hud-time { font-size: 24px; }
+}
+@media (max-height: 480px) and (max-width: 900px) {
+  #bottom { flex-direction: row; align-items: flex-end; gap: 10px; }
+  #timeline { padding: 8px 12px 6px; }
+  #advance-wrap { flex-direction: column; align-items: flex-end; gap: 6px; }
+  .advance { padding: 10px 16px; font-size: 16px; }
+  #noticed { display: none; }
+  #roomlist { bottom: calc(70px + env(safe-area-inset-bottom, 0px)); }
 }

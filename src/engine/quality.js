@@ -86,14 +86,17 @@ function decide() {
   const probe = probeWebGL2();
   let tier;
   let reason;
-  if (carried.tier && TIERS.includes(carried.tier)) {
-    // A choice made moments ago (Graphics buttons, or a step-down after a
-    // graphics failure) beats everything, including a ?quality= link.
+  if (carried.tier && carried.why === 'chosen' && TIERS.includes(carried.tier)) {
+    // A choice just made under Help → Graphics beats everything.
     tier = carried.tier;
-    reason = carried.why || 'chosen';
+    reason = 'chosen';
   } else if (forced && TIERS.includes(forced)) {
     tier = forced;
     reason = 'url';
+  } else if (carried.tier && TIERS.includes(carried.tier)) {
+    // A step-down after a graphics failure, carried even when storage is blocked.
+    tier = carried.tier;
+    reason = carried.why || 'after-loss';
   } else if (stored && TIERS.includes(stored)) {
     tier = stored;
     reason = read(local, KEY + '-why') || 'chosen';
