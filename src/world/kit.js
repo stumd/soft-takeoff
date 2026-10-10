@@ -1,6 +1,22 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mistUniforms, SKY_GLSL } from '../engine/stage.js';
+import { QUALITY } from '../engine/quality.js';
+
+// On the lite tier every lit surface uses the much cheaper Lambert shader.
+export function stdMat(params = {}) {
+  if (QUALITY.lite) {
+    const { roughness, metalness, ...rest } = params;
+    return new THREE.MeshLambertMaterial(rest);
+  }
+  return new THREE.MeshStandardMaterial(params);
+}
+
+// Shared resources are flagged so that despawning an entity never disposes them.
+export function markCached(res) {
+  if (res) res.userData.cached = true;
+  return res;
+}
 
 // A tiny modelling kit: everything in the diorama is built out of these.
 // Positions passed to box()/cyl() are the *base* of the shape (y = bottom).
@@ -11,7 +27,7 @@ const matCache = new Map();
 function cachedGeo(key, make) {
   let g = geoCache.get(key);
   if (!g) {
-    g = make();
+    g = markCached(make());
     geoCache.set(key, g);
   }
   return g;
@@ -22,9 +38,10 @@ export function mat(color, opts = {}) {
   let m = matCache.get(key);
   if (!m) {
     const { emissive, emissiveIntensity, rough = 0.85, metal = 0, flat = false, transparent, opacity, side, map, mist, lambert } = opts;
-    const Ctor = lambert ? THREE.MeshLambertMaterial : THREE.MeshStandardMaterial;
+    const useLambert = lambert || QUALITY.lite;
+    const Ctor = useLambert ? THREE.MeshLambertMaterial : THREE.MeshStandardMaterial;
     const params = { color, flatShading: flat };
-    if (!lambert) {
+    if (!useLambert) {
       params.roughness = rough;
       params.metalness = metal;
     }
@@ -41,6 +58,7 @@ export function mat(color, opts = {}) {
     if (side) m.side = side;
     if (map) m.map = map;
     if (mist) addMist(m);
+    markCached(m);
     matCache.set(key, m);
   }
   return m;
@@ -170,7 +188,7 @@ export function plane(w, d, color, o = {}) {
 export function card(w, h, texOrColor, o = {}) {
   const geo = cachedGeo(`q${w},${h}`, () => new THREE.PlaneGeometry(w, h));
   const material = o.mat || (texOrColor instanceof THREE.Texture
-    ? new THREE.MeshStandardMaterial({ map: texOrColor, roughness: 0.9, transparent: !!o.transparent, emissive: o.glow ? 0xffffff : 0x000000, emissiveMap: o.glow ? texOrColor : null, emissiveIntensity: o.glow ?? 0 })
+    ? stdMat({ map: texOrColor, roughness: 0.9, transparent: !!o.transparent, emissive: o.glow ? 0xffffff : 0x000000, emissiveMap: o.glow ? texOrColor : null, emissiveIntensity: o.glow ?? 0 })
     : mat(texOrColor, o.m));
   const m = new THREE.Mesh(geo, material);
   m.position.set(o.x || 0, o.y || 0, o.z || 0);
@@ -204,9 +222,9 @@ export function canvasTex(key, w, h, draw, opts = {}) {
   c.height = h;
   const ctx = c.getContext('2d');
   draw(ctx, w, h);
-  const t = new THREE.CanvasTexture(c);
+  const t = markCached(new THREE.CanvasTexture(c));
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = QUALITY.lite ? 1 : 4;
   if (opts.repeat) {
     t.wrapS = t.wrapT = THREE.RepeatWrapping;
     t.repeat.set(opts.repeat[0], opts.repeat[1]);

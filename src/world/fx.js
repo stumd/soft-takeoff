@@ -2,13 +2,16 @@ import { THREE, box, mat } from './kit.js';
 import { G } from '../engine/stage.js';
 import { rng } from '../engine/tween.js';
 import { puffTex } from './city.js';
+import { QUALITY } from '../engine/quality.js';
+
+const LITE = QUALITY.lite ? 0.45 : 1;
 
 // Weather and small living details.
 
 const AREA = { x0: -9, x1: 17, z0: -7, z1: 9 };
 
 export function rain(p = {}) {
-  const n = p.n ?? 900;
+  const n = Math.round((p.n ?? 900) * LITE);
   const pos = new Float32Array(n * 6);
   const r = rng(5);
   const drops = [];
@@ -37,7 +40,7 @@ export function rain(p = {}) {
 }
 
 function flakes(p, opts) {
-  const n = p.n ?? opts.n;
+  const n = Math.round((p.n ?? opts.n) * LITE);
   const r = rng(opts.seed);
   const pos = new Float32Array(n * 3);
   const items = [];
@@ -87,7 +90,7 @@ export const motes = (p = {}) => flakes(p, { n: 70, seed: 7, speed: 0.15, size: 
 export function leaves(p = {}) {
   const g = new THREE.Group();
   const r = rng(p.seed || 8);
-  const n = p.n ?? 40;
+  const n = Math.round((p.n ?? 40) * LITE);
   const cols = p.colors || ['#d9822b', '#e6a53a', '#c4562c', '#e0b24a'];
   const items = [];
   for (let i = 0; i < n; i++) {

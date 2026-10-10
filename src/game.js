@@ -6,6 +6,7 @@ import { renderBlocks, inline } from './ui/panel.js';
 import { audio } from './audio/audio.js';
 import { tweens, tween, wait, Ease, clamp } from './engine/tween.js';
 import { G } from './engine/stage.js';
+import { QUALITY, stepDown, switchTier, noteLoss, TIER_LABELS } from './engine/quality.js';
 
 const $ = (id) => document.getElementById(id);
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -58,6 +59,9 @@ export class Game {
     this._bind();
     this._buildTimeline();
     stage.onTick.push((dt, t) => this._frame(dt, t));
+    stage.onContextLost = () => this._contextLost();
+    stage.onContextRestored = () => this._contextRestored();
+    this._buildGraphicsSettings();
   }
 
   // ------------------------------------------------------------------ setup
@@ -158,7 +162,9 @@ export class Game {
   }
 
   _persist() {
-    save({ index: this.index, furthest: this.furthest, seen: this.seen, finished: this.finished });
+    // On the title screen there is no current visit; keep the saved one.
+    const index = this.index >= 0 ? this.index : (this.saved && this.saved.index) || 0;
+    save({ index, furthest: this.furthest, seen: this.seen, finished: this.finished });
   }
 
   toggleSound() {
@@ -172,6 +178,72 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ start
+  // ------------------------------------------------------------------ graphics
+  _buildGraphicsSettings() {
+    const row = $('gfx-options');
+    if (!row) return;
+    row.innerHTML = '';
+    for (const t of ['full', 'lite', 'text']) {
+      const b = document.createElement('button');
+      b.textContent = TIER_LABELS[t];
+      b.className = 'gfx' + (QUALITY.tier === t ? ' on' : '');
+      b.setAttribute('aria-pressed', QUALITY.tier === t ? 'true' : 'false');
+      b.onclick = () => {
+        if (QUALITY.tier === t) return;
+        switchTier(t, { note: `Graphics set to ${TIER_LABELS[t]}.` });
+      };
+      row.appendChild(b);
+    }
+    const why = { auto: 'chosen automatically for this device', chosen: 'your choice', url: 'set by the link', 'no-webgl2': 'this browser has no WebGL 2', 'webgl-failed': '3D could not start here' }[QUALITY.reason] || '';
+    $('gfx-info').textContent = `Now: ${TIER_LABELS[QUALITY.tier]}${why ? ` (${why})` : ''}.${QUALITY.gpu ? ` GPU: ${QUALITY.gpu}.` : ''}`;
+  }
+
+  toast(text, ms = 4000) {
+    const t = $('toast');
+    clearTimeout(this._toastTimer);
+    if (!text) {
+      t.classList.remove('show');
+      return;
+    }
+    t.textContent = text;
+    t.classList.add('show');
+    if (ms) this._toastTimer = setTimeout(() => t.classList.remove('show'), ms);
+  }
+
+  showNote(text) {
+    const n = $('title-gfx-note');
+    if (n) {
+      n.textContent = text;
+      n.classList.remove('hidden');
+    }
+  }
+
+  // The GPU dropped our context. Give the browser a moment to restore it;
+  // if it doesn't (or it keeps happening), step down a graphics tier and reload.
+  _contextLost() {
+    document.body.classList.add('gl-lost');
+    const n = noteLoss();
+    this.toast('The graphics stopped. Restarting them…', 0);
+    clearTimeout(this._lossTimer);
+    const giveUp = () => {
+      const tierNow = TIER_LABELS[QUALITY.tier];
+      const note = QUALITY.lite
+        ? 'Your device’s graphics stopped twice, so the story is now told without the 3D diorama. You can change this under ? → Graphics.'
+        : `Your device’s graphics stopped, so this is now running with lighter graphics (was ${tierNow}). You can change this under ? → Graphics.`;
+      this._persist();
+      stepDown({ note });
+    };
+    if (n >= 2) giveUp();
+    else this._lossTimer = setTimeout(giveUp, 3500);
+  }
+
+  _contextRestored() {
+    document.body.classList.remove('gl-lost');
+    clearTimeout(this._lossTimer);
+    this._lossTimer = null;
+    this.toast('Graphics restored.', 2500);
+  }
+
   showTitleWorld() {
     this.world.setState(sceneEntities(0), { animate: false });
     this.stage.setEnv(SCENES[0].env, 0);
@@ -214,7 +286,7 @@ export class Game {
     this.furthest = Math.max(this.furthest, i);
     this.scene = sc;
     this.world.setHotspots(sc.hotspots);
-    if (import.meta.env && import.meta.env.DEV) {
+    if (import.meta.env && import.meta.env.DEV && !QUALITY.text) {
       for (const h of sc.hotspots) {
         const ids = Array.isArray(h.target) ? h.target : [h.target];
         for (const id of ids) if (!this.world.get(id)) console.warn('Missing target', sc.id, h.id, id);
@@ -259,6 +331,7 @@ export class Game {
   }
 
   _buildMarkers() {
+    if (QUALITY.text) return this._buildRoomList();
     const host = $('markers');
     host.innerHTML = '';
     this.markers.clear();
@@ -273,6 +346,25 @@ export class Game {
       b.onfocus = () => this._setHover(h, b);
       b.onblur = () => this._setHover(null);
       host.appendChild(b);
+      this.markers.set(h.id, b);
+    }
+  }
+
+  // Without the diorama, the things to look at become a list.
+  _buildRoomList() {
+    const host = $('roomlist');
+    host.classList.remove('hidden');
+    $('rl-title').textContent = this.scene.title;
+    const list = $('rl-items');
+    list.innerHTML = '';
+    this.markers.clear();
+    const seen = this._seenSet();
+    for (const h of this.scene.hotspots) {
+      const b = document.createElement('button');
+      b.className = 'rl-item' + (h.isNew ? ' new' : '') + (h.special ? ' special' : '') + (seen.includes(h.id) ? ' seen' : '');
+      b.textContent = h.label || h.title;
+      b.onclick = () => this.activate(h);
+      list.appendChild(b);
       this.markers.set(h.id, b);
     }
   }
@@ -608,6 +700,7 @@ export class Game {
       m.classList.add('keep');
       m.classList.add('show-seen');
     }
+    if (QUALITY.text) $('rl-title').textContent = 'What would you keep?';
   }
 
   chooseKeep(h) {
@@ -676,6 +769,7 @@ export class Game {
     document.body.classList.remove('busy');
     this.furthest = SCENES.length - 1;
     for (const m of this.markers.values()) m.classList.remove('keep', 'show-seen');
+    if (QUALITY.text) $('rl-title').textContent = this.scene.title;
     this._updateTimeline();
     this._updateAdvance();
     $('btn-advance').classList.add('hidden');
@@ -684,7 +778,7 @@ export class Game {
 
   // ------------------------------------------------------------------ per frame
   _frame() {
-    if (!this.scene || this.state === 'title') return;
+    if (!this.scene || this.state === 'title' || QUALITY.text) return;
     const hideAll = this.busy || this.state === 'kettle' || this.state === 'ending';
     const panelLeft = this.panelOpen && window.innerWidth > 720 ? window.innerWidth - $('panel').offsetWidth : Infinity;
     for (const h of this.scene.hotspots) {

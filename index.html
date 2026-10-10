@@ -47,7 +47,13 @@
     </div>
   </footer>
 
+  <section id="roomlist" class="hidden" aria-label="Things to look at">
+    <h2 id="rl-title"></h2>
+    <div id="rl-items"></div>
+  </section>
+
   <div id="banner" class="hidden" role="status"></div>
+  <div id="toast" role="status" aria-live="polite"></div>
   <div id="subtitle" aria-live="polite"></div>
 
   <aside id="panel" aria-hidden="true" aria-labelledby="panel-title">
@@ -77,6 +83,7 @@
         <button id="btn-continue" class="big ghost hidden">Continue</button>
       </div>
       <p class="title-note">Best with sound &middot; about 30 minutes &middot; look closely at things</p>
+      <p id="title-gfx-note" class="title-gfx-note hidden"></p>
     </div>
   </section>
 
@@ -90,6 +97,10 @@
         <li>Visited moments stay on the timeline. Click a dot to go back.</li>
         <li>Keys: <kbd>Space</kbd> let time pass &middot; <kbd>Esc</kbd> close &middot; <kbd>M</kbd> sound</li>
       </ul>
+      <h3>Graphics</h3>
+      <p class="gfx-help">If the picture goes blank or the game stutters, try Lite. Text only tells the whole story without the 3D diorama. Changing this reloads the page, and your progress is kept.</p>
+      <div id="gfx-options" class="gfx-options" role="group" aria-label="Graphics quality"></div>
+      <p id="gfx-info" class="gfx-info"></p>
       <button id="help-close" class="big">Back</button>
     </div>
   </section>

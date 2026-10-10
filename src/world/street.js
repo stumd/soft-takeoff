@@ -1,7 +1,8 @@
-import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane, textTex } from './kit.js';
+import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane, textTex, stdMat } from './kit.js';
 import { brickTex } from './textures.js';
 import { robot, person } from './people.js';
 import { G } from '../engine/stage.js';
+import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
 
 // The street along the front of the diorama, and Tomasz's house next door.
@@ -116,14 +117,16 @@ export function lampPosts(p = {}) {
       l.add(box(0.06, 0.06, 0.5, '#3a3d40', { y: 3.15, z: 0.25 }));
       l.add(box(0.18, 0.1, 0.3, '#3a3d40', { y: 3.05, z: 0.5 }));
     }
-    const bulbMat = new THREE.MeshStandardMaterial({ color: '#fff1d0', emissive: p.style === 'new' ? '#e8f4ff' : '#ffb35a', emissiveIntensity: 0 });
+    const bulbMat = stdMat({ color: '#fff1d0', emissive: p.style === 'new' ? '#e8f4ff' : '#ffb35a', emissiveIntensity: 0 });
     const bulb = p.style === 'new'
       ? box(0.42, 0.02, 0.1, '', { mat: bulbMat, y: 2.97, x: 0.2, cast: false })
       : box(0.14, 0.04, 0.24, '', { mat: bulbMat, y: 3.01, z: 0.5, cast: false });
     l.add(bulb);
-    const pl = new THREE.PointLight(p.style === 'new' ? '#e8f0ff' : '#ffa850', 0, 7, 1.6);
-    pl.position.set(0, 2.8, 0.5);
-    l.add(pl);
+    const pl = QUALITY.lite ? null : new THREE.PointLight(p.style === 'new' ? '#e8f0ff' : '#ffa850', 0, 7, 1.6);
+    if (pl) {
+      pl.position.set(0, 2.8, 0.5);
+      l.add(pl);
+    }
     lamps.push({ bulbMat, pl });
     g.add(l);
   }
@@ -131,7 +134,7 @@ export function lampPosts(p = {}) {
     const on = G.night > 0.3 ? Math.min(1, (G.night - 0.3) * 2.5) : 0;
     for (const l of lamps) {
       l.bulbMat.emissiveIntensity = on * 2.2;
-      l.pl.intensity = on * 6;
+      if (l.pl) l.pl.intensity = on * 6;
     }
   };
   return g;
@@ -279,7 +282,7 @@ export function tomaszHouse(p = {}) {
   const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
   const bt = brickTex();
   bt.wrapS = bt.wrapT = THREE.RepeatWrapping;
-  const bm = new THREE.MeshStandardMaterial({ map: bt, roughness: 0.95 });
+  const bm = stdMat({ map: bt, roughness: 0.95 });
   const walls = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, H, z1 - z0), bm);
   // world-ish UVs
   const uv = walls.geometry.attributes.uv;
@@ -313,7 +316,7 @@ export function tomaszHouse(p = {}) {
   // Front (+z) windows and door.
   const winMats = [];
   const win = (x, y, face = 'z') => {
-    const wm = new THREE.MeshStandardMaterial({ color: '#2a3540', emissive: '#ffc070', emissiveIntensity: 0, roughness: 0.2 });
+    const wm = stdMat({ color: '#2a3540', emissive: '#ffc070', emissiveIntensity: 0, roughness: 0.2 });
     winMats.push(wm);
     if (face === 'z') {
       g.add(box(1.0, 1.1, 0.06, '#f2efe8', { x, y: y - 0.05, z: z1 + 0.02 }));

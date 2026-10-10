@@ -1,4 +1,4 @@
-import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane } from './kit.js';
+import { THREE, box, cyl, sphere, ico, cone, group, mat, card, plane, stdMat } from './kit.js';
 import { G } from '../engine/stage.js';
 import { rng } from '../engine/tween.js';
 
@@ -323,7 +323,7 @@ export function greenhouse(p = {}) {
   const g = new THREE.Group();
   const W = 3.0, D = 1.6, H = 1.7;
   const frame = '#f2f2ee';
-  const glassM = new THREE.MeshStandardMaterial({ color: '#d8eef0', transparent: true, opacity: 0.28, roughness: 0.1, depthWrite: false });
+  const glassM = stdMat({ color: '#d8eef0', transparent: true, opacity: 0.28, roughness: 0.1, depthWrite: false });
   g.add(box(W, 0.2, D, '#a8754e', {}));
   for (const x of [-W / 2, -W / 4, 0, W / 4, W / 2]) for (const z of [-D / 2, D / 2]) g.add(box(0.04, H, 0.04, frame, { x, z }));
   for (const z of [-D / 2, D / 2]) g.add(box(W, 0.04, 0.04, frame, { y: H, z }));

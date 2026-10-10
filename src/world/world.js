@@ -13,6 +13,27 @@ function stableKey(spec) {
   return JSON.stringify([spec.m, spec.p || null, spec.at || null, spec.ry || 0, spec.s || 1]);
 }
 
+// Free the GPU memory an entity owned. Shared (cached) geometries, materials
+// and textures are flagged and left alone; sprites share one internal quad.
+function disposeTree(root) {
+  const geos = new Set();
+  const mats = new Set();
+  root.traverse((o) => {
+    if (o.userData.isOutline) return;
+    if (o.geometry && !o.isSprite && !o.geometry.userData.cached) geos.add(o.geometry);
+    const list = Array.isArray(o.material) ? o.material : o.material ? [o.material] : [];
+    for (const m of list) if (!m.userData.cached) mats.add(m);
+  });
+  for (const g of geos) g.dispose();
+  for (const m of mats) {
+    for (const k of ['map', 'emissiveMap', 'alphaMap']) {
+      const t = m[k];
+      if (t && !t.userData.cached) t.dispose();
+    }
+    m.dispose();
+  }
+}
+
 const outlineMat = new THREE.MeshBasicMaterial({ color: '#fff1c8', side: THREE.BackSide, transparent: true, opacity: 0.95, depthWrite: false });
 const bboxCache = new WeakMap();
 
@@ -135,6 +156,7 @@ export class World {
     const remove = () => {
       obj.parent && obj.parent.remove(obj);
       ent.ticks = [];
+      disposeTree(obj);
     };
     this._unhighlight(ent);
     if (!animate) return remove();

@@ -1,12 +1,36 @@
+import { QUALITY, takeResume } from './engine/quality.js';
 import { Stage } from './engine/stage.js';
+import { NullStage, NullWorld } from './engine/nullstage.js';
 import { World } from './world/world.js';
 import { Game } from './game.js';
 import { SCENES, sceneEntities } from './story/scenes.js';
 
 const canvas = document.getElementById('gl');
-const stage = new Stage(canvas);
-const world = new World(stage);
+document.body.classList.add('tier-' + QUALITY.tier);
+
+// Build the 3D stage; if that fails outright, tell the story without it.
+let stage;
+let world;
+if (!QUALITY.text) {
+  try {
+    stage = new Stage(canvas);
+    world = new World(stage);
+  } catch (e) {
+    console.warn('WebGL unavailable, using text mode:', e && e.message);
+    QUALITY.tier = 'text';
+    QUALITY.reason = 'webgl-failed';
+    document.body.classList.remove('tier-full', 'tier-lite');
+    document.body.classList.add('tier-text');
+  }
+}
+if (QUALITY.text) {
+  stage = new NullStage(canvas);
+  world = new NullWorld(stage);
+}
+
 const game = new Game(stage, world);
+const resume = takeResume();
+if (resume && resume.note) game.showNote(resume.note);
 
 const params = new URLSearchParams(location.search);
 const debugScene = params.get('scene');
@@ -31,3 +55,4 @@ stage.start();
 window.__game = game;
 window.__stage = stage;
 window.__world = world;
+window.__quality = QUALITY;

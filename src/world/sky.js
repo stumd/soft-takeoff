@@ -18,6 +18,7 @@ function dotTex() {
   ctx.fillStyle = g;
   ctx.fillRect(0, 0, 32, 32);
   dotTex.t = new THREE.CanvasTexture(c);
+  dotTex.t.userData.cached = true;
   return dotTex.t;
 }
 

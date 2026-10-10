@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { tweens, lerp, clamp } from './tween.js';
 import { ENV, cloneEnv, lerpEnv } from './env.js';
+import { QUALITY } from './quality.js';
 
 // Values that models read every frame (how dark it is, whether lamps are on, wind...).
 export const G = {
@@ -79,10 +80,14 @@ void main() {
 
 export class Stage {
   constructor(canvas) {
-    const r = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
-    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    const lite = QUALITY.lite;
+    // Phones get no MSAA, a lower pixel ratio and simpler shadows: drawing-buffer
+    // memory and shader cost are what make mobile GPUs drop the context.
+    const r = new THREE.WebGLRenderer({ canvas, antialias: !lite, powerPreference: lite ? 'default' : 'high-performance' });
+    this.maxRatio = lite ? 1.5 : 2;
+    r.setPixelRatio(Math.min(window.devicePixelRatio || 1, this.maxRatio));
     r.shadowMap.enabled = true;
-    r.shadowMap.type = THREE.PCFSoftShadowMap;
+    r.shadowMap.type = lite ? THREE.PCFShadowMap : THREE.PCFSoftShadowMap;
     r.toneMapping = THREE.NeutralToneMapping;
     r.toneMappingExposure = 1.0;
     this.renderer = r;
@@ -121,6 +126,16 @@ export class Stage {
     this.maxDt = new URLSearchParams(location.search).has('fast') ? 1 : 0.05;
     this._resize = this._resize.bind(this);
     window.addEventListener('resize', this._resize);
+    // three.js listens first and calls preventDefault, which allows a restore.
+    this.contextLost = false;
+    canvas.addEventListener('webglcontextlost', () => {
+      this.contextLost = true;
+      this.onContextLost && this.onContextLost();
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      this.contextLost = false;
+      this.onContextRestored && this.onContextRestored();
+    });
     this._resize();
     this._bindControls(canvas);
   }
@@ -143,7 +158,8 @@ export class Stage {
   _makeLights() {
     const sun = new THREE.DirectionalLight(0xffffff, 2);
     sun.castShadow = true;
-    sun.shadow.mapSize.set(2048, 2048);
+    const sm = QUALITY.lite ? 1024 : 2048;
+    sun.shadow.mapSize.set(sm, sm);
     const sc = sun.shadow.camera;
     sc.left = -19; sc.right = 19; sc.top = 15; sc.bottom = -15;
     sc.near = 1; sc.far = 120;
@@ -347,8 +363,9 @@ export class Stage {
     if (fps < 42 && r > 1) {
       this.renderer.setPixelRatio(Math.max(1, r - 0.35));
       this._resize();
-    } else if (fps < 24 && this.sun.shadow.mapSize.x > 1024) {
-      this.sun.shadow.mapSize.set(1024, 1024);
+    } else if (fps < 24 && this.sun.shadow.mapSize.x > 512) {
+      const n = this.sun.shadow.mapSize.x / 2;
+      this.sun.shadow.mapSize.set(n, n);
       this.sun.shadow.map?.dispose();
       this.sun.shadow.map = null;
     } else {

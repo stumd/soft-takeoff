@@ -1,4 +1,4 @@
-import { THREE, box, cyl, sphere, ico, cone, group, mat, card, textTex, windowTex, emissiveWindowTex, tiledBoxGeo, addMist } from './kit.js';
+import { THREE, box, cyl, sphere, ico, cone, group, mat, card, textTex, windowTex, emissiveWindowTex, tiledBoxGeo, addMist, markCached } from './kit.js';
 import { G } from '../engine/stage.js';
 import { rng } from '../engine/tween.js';
 
@@ -28,6 +28,7 @@ function buildingMat(color, variant = 0) {
   const em = emissiveWindowTex(variant);
   const m = new THREE.MeshLambertMaterial({ color, map, emissive: '#ffc87a', emissiveMap: em, emissiveIntensity: 0 });
   addMist(m);
+  markCached(m);
   nightMats.push(m);
   buildingMat.cache[key] = m;
   return m;
@@ -42,6 +43,7 @@ function plainMist(color, extra = {}) {
   if (extra.emissive) {
     m.userData.nightK = extra.nightK ?? 1;
   }
+  markCached(m);
   plainMist.cache[key] = m;
   return m;
 }
@@ -52,6 +54,7 @@ function glowMist(color, intensity = 1) {
   if (plainMist.cache[key]) return plainMist.cache[key];
   const m = new THREE.MeshLambertMaterial({ color: '#111', emissive: color, emissiveIntensity: intensity });
   addMist(m);
+  markCached(m);
   plainMist.cache[key] = m;
   return m;
 }
@@ -214,7 +217,7 @@ const puffTex = (() => {
     gr.addColorStop(1, 'rgba(255,255,255,0)');
     ctx.fillStyle = gr;
     ctx.fillRect(0, 0, 64, 64);
-    t = new THREE.CanvasTexture(c);
+    t = markCached(new THREE.CanvasTexture(c));
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
   };

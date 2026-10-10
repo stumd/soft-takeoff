@@ -1,6 +1,7 @@
-import { THREE, box, cyl, sphere, card, group, mat, canvasTex, textTex, cone, ico } from './kit.js';
+import { THREE, box, cyl, sphere, card, group, mat, canvasTex, textTex, cone, ico, stdMat } from './kit.js';
 import { floorTex, wallpaperTex, tileTex, rugTex, calendarTex } from './textures.js';
 import { G } from '../engine/stage.js';
+import { QUALITY } from '../engine/quality.js';
 
 // The kitchen-diner. Interior spans x[-8,0], z[-6,0]; the two walls nearest the
 // camera are cut away so we can see in, like a doll's house.
@@ -19,7 +20,7 @@ function uvPlane(w, h, tile, ox = 0, oy = 0) {
 function wallpaper(tone) {
   const t = wallpaperTex(tone);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
-  return new THREE.MeshStandardMaterial({ map: t, roughness: 0.95 });
+  return stdMat({ map: t, roughness: 0.95 });
 }
 
 export function walls(p = {}) {
@@ -82,7 +83,7 @@ export function walls(p = {}) {
   g.add(box(0.06, 1.25, 0.12, fr, { x: -5.0, y: 1.2, z: -6.0 }));
   g.add(box(0.06, 1.25, 0.12, fr, { x: -3.4, y: 1.2, z: -6.0 }));
   g.add(box(0.05, 1.25, 0.08, fr, { x: -4.2, y: 1.2, z: -6.0 }));
-  const glassMat = new THREE.MeshStandardMaterial({ color: '#cfe2ec', transparent: true, opacity: 0.32, roughness: 0.1, metalness: 0.2, depthWrite: false });
+  const glassMat = stdMat({ color: '#cfe2ec', transparent: true, opacity: 0.32, roughness: 0.1, metalness: 0.2, depthWrite: false });
   const glass = card(1.6, 1.25, null, { mat: glassMat, x: -4.2, y: 1.825, z: -6.02 });
   glass.material = glassMat;
   g.add(glass);
@@ -108,7 +109,7 @@ export function walls(p = {}) {
 
 export function floor() {
   const t = floorTex();
-  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 0.75 });
+  const m = stdMat({ map: t, roughness: 0.75 });
   const f = new THREE.Mesh(new THREE.PlaneGeometry(8, 6), m);
   f.rotation.x = -Math.PI / 2;
   f.position.set(-4, 0.02, -3);
@@ -140,7 +141,7 @@ export function kitchen(p = {}) {
   // Splashback tiles.
   const tt = tileTex();
   tt.wrapS = tt.wrapT = THREE.RepeatWrapping;
-  const tileMat = new THREE.MeshStandardMaterial({ map: tt, roughness: 0.5 });
+  const tileMat = stdMat({ map: tt, roughness: 0.5 });
   for (const [a, b] of [[-6.85, -5.0], [-3.4, -0.9]]) {
     const pl = new THREE.Mesh(uvPlane(b - a, 0.7, 0.5, a, 0), tileMat);
     pl.position.set((a + b) / 2, 0.93 + 0.35, -5.995);
@@ -227,7 +228,7 @@ export function fridge(p = {}) {
     let w = 0.18, h = 0.18, material;
     if (kind === 'draw' || kind === 'draw2') {
       w = 0.26; h = 0.2;
-      material = new THREE.MeshStandardMaterial({ map: scribbleTex(i + (kind === 'draw2' ? 50 : 0) + (p.seed || 0), ['#e0483a', '#2f6fd0', '#f2b822', '#3aa65a']), roughness: 0.9 });
+      material = stdMat({ map: scribbleTex(i + (kind === 'draw2' ? 50 : 0) + (p.seed || 0), ['#e0483a', '#2f6fd0', '#f2b822', '#3aa65a']), roughness: 0.9 });
     } else if (kind === 'photo') {
       w = 0.17; h = 0.2;
       material = mat('#f5f3ee');
@@ -282,20 +283,23 @@ export function pip(p = {}) {
   const g = new THREE.Group();
   g.add(cyl(0.1, 0.11, 0.09, '#d6d0c6', { y: 0, m: { rough: 1 } }));
   g.add(cyl(0.085, 0.1, 0.012, '#bdb6aa', { y: 0.09 }));
-  const ringMat = new THREE.MeshStandardMaterial({ color: p.color || '#ffd59a', emissive: p.color || '#ffd59a', emissiveIntensity: 1 });
+  const ringMat = stdMat({ color: p.color || '#ffd59a', emissive: p.color || '#ffd59a', emissiveIntensity: 1 });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 6, 28), ringMat);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.1;
   g.add(ring);
-  const light = new THREE.PointLight(p.color || '#ffd59a', 0, 1.2, 2);
-  light.position.y = 0.2;
-  g.add(light);
+  // Every point light makes every lit shader heavier, so the lite tier skips this one.
+  const light = QUALITY.lite ? null : new THREE.PointLight(p.color || '#ffd59a', 0, 1.2, 2);
+  if (light) {
+    light.position.y = 0.2;
+    g.add(light);
+  }
   let speak = 0;
   g.userData.speak = (v) => { speak = v; };
   g.userData.tick = (dt, t) => {
     const k = 0.7 + Math.sin(t * (p.fast ? 3 : 1.2)) * 0.3 + speak * (0.5 + Math.sin(t * 17) * 0.5);
     ringMat.emissiveIntensity = (p.dim ? 0.4 : 1) * k * 1.4;
-    light.intensity = k * 0.25 + speak * 0.8;
+    if (light) light.intensity = k * 0.25 + speak * 0.8;
   };
   return g;
 }
@@ -348,7 +352,7 @@ export function armchair(p = {}) {
 
 export function rug(p = {}) {
   const t = rugTex(p.variant || 0);
-  const m = new THREE.MeshStandardMaterial({ map: t, roughness: 1 });
+  const m = stdMat({ map: t, roughness: 1 });
   const r = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 1.9), m);
   r.rotation.x = -Math.PI / 2;
   r.position.y = 0.035;
