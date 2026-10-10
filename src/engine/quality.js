@@ -93,10 +93,17 @@ function writeWindowName(v) {
 // Keep the shadow setting riding along even when nothing else changes.
 if (carried.shadows) writeWindowName({ shadows: carried.shadows });
 
+// Automatic step-downs saved before this version came from the shadow-map
+// fault (now avoided), so they are forgotten; explicit choices are kept.
+const POLICY = 2;
+const stale = (why, v) => why !== 'chosen' && !(Number(v) >= POLICY);
+
 function decide() {
   const params = new URLSearchParams(location.search);
   const forced = params.get('quality');
-  const stored = read(local, KEY);
+  let stored = read(local, KEY);
+  if (stored && stale(read(local, KEY + '-why') || 'chosen', read(local, KEY + '-v'))) stored = null;
+  if (carried.tier && stale(carried.why || 'after-loss', carried.v)) delete carried.tier;
   const probe = probeWebGL2();
   let tier;
   let reason;
@@ -216,7 +223,8 @@ export function markLossRestored(ms) {
 export function rememberTier(tier, why = 'after-loss') {
   write(local, KEY, tier);
   write(local, KEY + '-why', why);
-  writeWindowName({ tier, why });
+  write(local, KEY + '-v', String(POLICY));
+  writeWindowName({ tier, why, v: POLICY });
 }
 
 // Persist a tier and reload (used by the Graphics buttons in Help).
