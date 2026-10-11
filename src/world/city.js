@@ -1045,10 +1045,19 @@ export function newTowers(p = {}) {
     b.box(w * 0.8, hh * 0.4, w * 0.8, c2, 0, hh * 0.6, 0);
     for (let y = 1.1 * k; y < hh; y += 1.1 * k) {
       const q = y < hh * 0.6 ? 1 : 0.8;
-      b.box(w * q + 0.05, 0.05, w * q + 0.05, '#eef3f6', 0, y, 0);
+      const s = w * q + 0.05;
+      if (LITE) {
+        // (on phones a floor band is its four sides: its top and underside
+        // are too thin to see)
+        const bg = new THREE.BoxGeometry(s, 0.05, s).translate(0, 0.025, 0);
+        bg.setIndex(Array.from(bg.index.array).filter((_, j) => j < 12 || j >= 24));
+        b.add(bg, '#eef3f6', { y });
+      } else b.box(s, 0.05, s, '#eef3f6', 0, y, 0);
     }
     if (!partial) {
-      b.cone(0.32 * k, 1.6 * k, '#e4ecf2', 0, hh, 0);
+      // (on phones without the spire's base, which sits on the roof)
+      if (LITE) b.add(new THREE.ConeGeometry(0.32 * k, 1.6 * k, 6, 1, true).translate(0, 0.8 * k, 0), '#e4ecf2', { y: hh });
+      else b.cone(0.32 * k, 1.6 * k, '#e4ecf2', 0, hh, 0);
       b.box(0.02, 0.9 * k, 0.02, '#eef3f6', 0, hh + 1.6 * k, 0);
     } else {
       // the printer gantry
@@ -1165,7 +1174,7 @@ export function spindle(p = {}) {
   const ys = p.partial ? [H - 0.25] : [6.5, 18.5, 30.5, 42.5, 54.5];
   for (const y of ys) {
     const rr = 0.72 - (y / 64) * 0.2;
-    const t = new THREE.TorusGeometry(rr, 0.045, LITE ? 4 : 5, LITE ? 18 : 28);
+    const t = new THREE.TorusGeometry(rr, 0.045, LITE ? 3 : 5, LITE ? 12 : 28);
     t.rotateX(Math.PI / 2);
     t.translate(0, y, 0);
     rings.push(t);
@@ -1200,8 +1209,10 @@ export function gardenCity(p = {}) {
     for (let i = 0; i < levels; i++) {
       const rr = 1.15 - (i / levels) * 0.45 + Math.sin(i * 1.7 + sx) * 0.12;
       if (b) {
-        b.cyl(rr, rr * 0.92, 0.22, '#f4f1e8', 0, i * 1.9, 0, { seg: 14 });
-        b.cyl(rr * 0.5, rr * 0.55, 1.68, '#cfe2e6', 0, i * 1.9 + 0.22, 0, { seg: 12 });
+        // (fewer sides, and the glass core's ends left open: the terraces
+        // above and below it cover them)
+        b.cyl(rr, rr * 0.92, 0.22, '#f4f1e8', 0, i * 1.9, 0, { seg: 10 });
+        b.add(new THREE.CylinderGeometry(rr * 0.5, rr * 0.55, 1.68, 8, 1, true).translate(0, 0.84, 0), '#cfe2e6', { y: i * 1.9 + 0.22 });
       } else {
         const disc = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr * 0.92, 0.22, 14), white);
         disc.position.y = i * 1.9 + 0.11;
@@ -1213,7 +1224,8 @@ export function gardenCity(p = {}) {
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * Math.PI * 2 + i * 0.9;
         const args = [0.22 + r() * 0.12, ['#5f9a4a', '#7fae4a', '#8fbf5a'][k % 3], Math.cos(a) * rr * 0.82, i * 1.9 + 0.38, Math.sin(a) * rr * 0.82];
-        if (b) b.ico(...args);
+        // (on phones, where they are a few pixels across, eight-sided)
+        if (b) b.add(new THREE.OctahedronGeometry(args[0], 0), args[1], { x: args[2], y: args[3], z: args[4] });
         else t.add(placeIco(...args));
       }
     }
