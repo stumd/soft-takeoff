@@ -10,9 +10,9 @@ import { xAt, sxOf, groundY, HILL } from './terrain.js';
 // floating slab: the neighbours' houses along the street, the far side of the
 // road, the allotments that run down to the river behind, the land the city
 // stands on across the river, and (seen only from tall screens, which look
-// from higher up) a far district beyond the hill. All of it is built into a few
-// vertex-coloured meshes, casts no shadows, and fades with the same mist as
-// the city.
+// from higher up) the land beyond the hill that runs back to the far
+// district (city.js). All of it is built into a few vertex-coloured meshes,
+// casts no shadows, and fades with the same mist as the city.
 
 const LITE = QUALITY.lite;
 
@@ -32,14 +32,13 @@ function materials() {
   if (mats) return mats;
   const body = markCached(new THREE.MeshLambertMaterial({ vertexColors: true }));
   addMist(body, 0.55);
-  const dark = markCached(new THREE.MeshLambertMaterial({ color: '#2a3540' }));
-  addMist(dark);
   const lit = markCached(new THREE.MeshLambertMaterial({ color: '#2a3540', emissive: '#ffc070', emissiveIntensity: 0 }));
   addMist(lit);
-  // the far district: a silhouette against the sky behind it
+  // the land beyond the crest: in the haze of the distance, and taking part
+  // of its colour from the sky behind it
   const hills = markCached(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  addMist(hills, 1, 0.6, -21.4);
-  mats = { body, dark, lit, hills };
+  addMist(hills, 1, 0.48, -23);
+  mats = { body, lit, hills };
   return mats;
 }
 
@@ -216,8 +215,8 @@ function car(b, r, x, z, flip) {
 }
 
 // The land across the river, which the city stands on: flat along the bank,
-// then the long rise of the hill to its crest. (Beyond the crest it belongs
-// to the far district: see farDistrict().)
+// then the long rise of the hill to its crest. (Beyond the crest: see
+// farLand().)
 const LAND_ZS = [-21.3, -24, -27.5, -29, -30.5, -32, -33.5, -35, -36.5, -38, -39.5, -41, HILL.crest];
 // (screen-x extent and grid step: the far land beyond the crest uses the same)
 const LAND = LITE ? { sx0: -40, sx1: 52, step: 6 } : { sx0: -60, sx1: 72, step: 3 };
@@ -263,45 +262,17 @@ function landStrip(SX0, SX1, step, zs, k, c0, c1) {
 }
 
 // Beyond the crest of the city's hill, the land falls gently away for a long
-// way, and the city carries on at the bottom of it: a far district, cut out
-// as one flat silhouette of roofs and towers (taller towards its own centre),
-// like the furthest flat of a paper theatre. From a landscape screen both
-// hide behind the crest; tall screens and the story's pull-backs look from
-// higher up and see the land run back from the crest to the district, which
-// stands on it, so a phone's tall frame holds land, not just sky. Both take
-// most of their colour from the sky right behind them.
-function farDistrict(t) {
+// way, to the far district (city.js), where the city carries on at the bottom
+// of it. From a landscape screen it hides behind the crest; tall screens and
+// the story's pull-backs look from higher up and see the land run back from
+// the crest to the district, which stands on it, so a phone's tall frame
+// holds land, not just sky. It is land in haze, as the hill in front of it
+// is: its own colour at the crest, paler and bluer with the distance.
+// (On the same grid as the hill's, so they meet without a seam.)
+function farLand(t) {
   const b = new Batch();
-  const SX0 = LITE ? -46 : -76, SX1 = LITE ? 56 : 86, Z = -95;
-  // the land, first in the batch so it hides the foot of the district cheaply
-  // (on the same grid as the hill's, so they meet without a seam)
-  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LITE ? [HILL.crest, Z - 0.3] : [HILL.crest, -52, -64, -78, Z - 0.3], (z) => Math.min(1, (HILL.crest - z) / 40), t.hill, t.ridge[1]));
-  const r = rng(911);
-  const steps = [];
-  for (let sx = SX0; sx < SX1;) {
-    const c = Math.exp(-(((sx - 4) / 16) ** 2));
-    const w = 0.5 + r() * 1.1;
-    const gap = r() < 0.12;
-    steps.push([sx, w, gap ? 0 : 0.2 + r() * (0.6 + 1.7 * c) * (r() < 0.15 + 0.2 * c ? 1.6 : 1)]);
-    sx += w;
-  }
-  const hill = (sx) => -20.9 + 0.5 * Math.sin(sx * 0.05 + 1.3) + 0.3 * Math.sin(sx * 0.14);
-  // (its foot only just below the land in front of it)
-  const shape = new THREE.Shape();
-  shape.moveTo(SX0, hill(SX0) - 1.6);
-  for (const [a, w, h] of steps) {
-    shape.lineTo(a, hill(a) + h);
-    shape.lineTo(a + w, hill(a + w) + h);
-  }
-  shape.lineTo(SX1, hill(SX1) - 1.6);
-  shape.lineTo(SX0, hill(SX0) - 1.6);
-  const geo = new THREE.ShapeGeometry(shape);
-  // shape x is screen-x: stand it along the row at depth Z
-  const p = geo.attributes.position;
-  for (let i = 0; i < p.count; i++) p.setXYZ(i, xAt(p.getX(i), Z), p.getY(i), Z);
-  geo.computeVertexNormals();
-  b.add(geo, t.ridge[0]);
-  geo.dispose();
+  const Z = -95;
+  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LITE ? [HILL.crest, Z - 0.3] : [HILL.crest, -52, -64, -78, Z - 0.3], (z) => Math.min(1, (HILL.crest - z) / 40) * 0.75, t.hill, t.ridge[1]));
   return b.mesh(materials().hills);
 }
 
@@ -392,9 +363,10 @@ export function surrounds(p = {}) {
   const t = TONES[p.tone] || TONES.green;
   const era = p.era ?? 0;
   const r = rng(404);
-  const { body, dark, lit } = materials();
+  const { body, lit } = materials();
   const b = new Batch();
-  const win = { lit: new Batch(), dark: new Batch() };
+  // (unlit windows are just dark glass: they go in with everything else)
+  const win = { lit: new Batch(), dark: b };
   const XL = -90, XR = 110;
 
   // The ground from the street to the river, under everything.
@@ -406,7 +378,9 @@ export function surrounds(p = {}) {
   // piers, hedges, bins, front gardens.
   b.box(XR - XL, 0.1, 1.3, t.snow ? '#eef2f4' : '#b9b4ab', (XL + XR) / 2, 0, 9.05);
   b.box(XR - XL, 0.12, 0.12, '#d6d2ca', (XL + XR) / 2, 0, 8.42);
-  b.quad(XL, XR, 10.25, 60, t.snow ? '#e4eaee' : t.grass, -0.03);
+  // (out to well past the bottom of any frame, the story's pull-backs on a
+  // landscape phone included)
+  b.quad(XL, XR, 10.25, 140, t.snow ? '#e4eaee' : t.grass, -0.03);
   {
     const D0 = LITE ? -24 : -60, D1 = LITE ? 34 : 74;
     // Beyond the front gardens, a green runs along the street: a footpath
@@ -494,11 +468,9 @@ export function surrounds(p = {}) {
   const m = b.mesh(body);
   m.receiveShadow = !LITE;
   g.add(m);
-  g.add(farDistrict(t));
+  g.add(farLand(t));
   const wl = win.lit.mesh(lit);
-  const wd = win.dark.mesh(dark);
   if (wl) g.add(wl);
-  if (wd) g.add(wd);
   g.userData.tick = () => {
     lit.emissiveIntensity = G.night * 1.25;
   };

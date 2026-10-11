@@ -1,10 +1,10 @@
 import { THREE, group, textTex, windowTex, emissiveWindowTex, addMist, markCached, drawnTexture } from './kit.js';
 import { Batch } from './batch.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { G } from '../engine/stage.js';
+import { G, VIEW_DEFAULT } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
-import { xAt, groundY, place } from './terrain.js';
+import { xAt, groundY, place, HILL } from './terrain.js';
 
 // The world beyond the back gardens, seen side-on like the flats of a paper
 // theatre. From front to back (world z):
@@ -15,6 +15,8 @@ import { xAt, groundY, place } from './terrain.js';
 //                each row back is smaller, finer-windowed and paler, so the
 //                city recedes rather than standing as one wall
 //  -48           the Spindle, rising from behind the crest
+//  -95           the far district, at the foot of the long fall beyond the
+//                crest: seen only from higher up (tall screens, pull-backs)
 // Positions are given as screen-x (sx: left/right as the default camera sees
 // it, in world units) and world z; see terrain.js.
 
@@ -317,7 +319,158 @@ export function city(p = {}) {
   const landmarks = group(lm.mesh(batchMat()));
   landmarks.userData.h = 10;
   g.add(landmarks);
+  // and the city carrying on far off, beyond the hill
+  const far = group(new THREE.Mesh(farDistrict(variant), farMat()));
+  far.userData.h = 4;
+  g.add(far);
   return g;
+}
+
+// ---------------------------------------------------------------------------
+// The far district: the city carrying on at the foot of the long fall beyond
+// the crest (terrain.js), standing on the far land (surrounds.js). From a
+// wide screen it stays hidden behind the crest; tall screens and the story's
+// pull-backs look from higher up and see the land run back to it. It is drawn
+// the way a city a long way off looks through haze: a row of separate blocks
+// and towers in pale, slightly varied tones, paler still at the foot where
+// the haze lies on the land, taking most of their colour from the sky behind
+// (a flat, but not a dark cut-out). It is part of the city and changes with
+// it: thinned while the kettle sequence takes the old city down, and in the
+// garden city of 2051 slim tiered towers among trees, not the old skyline.
+const FAR = { z: -95, sx0: LITE ? -32 : -60, sx1: LITE ? 38 : 72, sil: 0.66 };
+// The tallest a far building may stand over its ground and still hide behind
+// the crest from the wide-screen camera (screen height, for equal screen-x:
+// y cos(el) + (-z) sin(el) / cos(az)), less a margin.
+const FAR_HMAX = (() => {
+  const el = VIEW_DEFAULT.el, run = HILL.crest - FAR.z;
+  return HILL.fall * run - (run * Math.tan(el)) / Math.cos(VIEW_DEFAULT.az) - 0.55;
+})();
+
+function farMat() {
+  if (cityMat.cache.far) return cityMat.cache.far;
+  const m = new THREE.MeshLambertMaterial({ vertexColors: true });
+  // (melting into the sky only below the ground, where nothing shows)
+  addMist(m, 1, FAR.sil, groundY(FAR.sx1, FAR.z) - 1.2);
+  markCached(m);
+  cityMat.cache.far = m;
+  return m;
+}
+
+const FAR_PAL = {
+  old: ['#7d8896', '#8a94a0', '#727e8c', '#959ca6', '#7a8590', '#868c98'],
+  snow: ['#a6b0bc', '#b4bcc6', '#9ca8b6', '#c0c6ce'],
+  garden: { tower: '#eef0e8', disc: '#a4c290', crown: '#7fa868', tree: ['#6f9a5c', '#7ea866', '#638e54'], block: ['#c8ccbc', '#bcc4b0', '#d0d0c0'], roof: '#86ac6c' },
+};
+// the haze at the foot of everything far off
+const FAR_FOOT = '#aab4be';
+
+// One flat mesh, facing the camera, in screen-x: quads and fans with a colour
+// per corner. Every building's random values are drawn whatever the variant.
+function farDistrict(variant) {
+  const pos = [], col = [];
+  const Z = FAR.z;
+  const cT = new THREE.Color(), cB = new THREE.Color(), foot = new THREE.Color(FAR_FOOT);
+  const gy = (sx) => groundY(sx, Z);
+  const vert = (sx, y, c) => {
+    pos.push(xAt(sx, Z), y, Z);
+    col.push(c.r, c.g, c.b);
+  };
+  // a block from a to b, from h0 to h1 over the ground (h0 null: from just
+  // below it); its colour `top` at the top, mixed `fk` into the haze at the
+  // bottom
+  const block = (a, b, h0, h1, top, fk = 0.55) => {
+    cT.set(top);
+    cB.copy(cT).lerp(foot, fk);
+    const ya = gy(a), yb = gy(b);
+    const ba = h0 == null ? ya - 0.5 : ya + h0, bb = h0 == null ? yb - 0.5 : yb + h0;
+    vert(a, ba, cB); vert(b, bb, cB); vert(b, yb + h1, cT);
+    vert(a, ba, cB); vert(b, yb + h1, cT); vert(a, ya + h1, cT);
+  };
+  // a rounded crown (a tree, a canopy of trees) of half-width rx and height ry
+  // standing at height y0 over the ground at cx: a fan of `seg` triangles
+  const crown = (cx, rx, y0, ry, c, seg = 3) => {
+    cT.set(c);
+    cB.copy(cT).lerp(foot, y0 > 0 ? 0.2 : 0.45);
+    const g0 = gy(cx) + y0;
+    for (let i = 0; i < seg; i++) {
+      const a0 = Math.PI * (i / seg), a1 = Math.PI * ((i + 1) / seg);
+      vert(cx, g0 - (y0 > 0 ? 0 : 0.5), cB);
+      vert(cx + rx * Math.cos(a0), g0 + ry * Math.sin(a0), cT);
+      vert(cx + rx * Math.cos(a1), g0 + ry * Math.sin(a1), cT);
+    }
+  };
+  const cap = (h) => Math.min(h, FAR_HMAX);
+
+  if (variant === 'green') {
+    // 2051: slim white towers, tiered, crowned with green, among trees and
+    // low planted blocks
+    const P = FAR_PAL.garden;
+    const r = rng(912);
+    for (let sx = FAR.sx0; sx < FAR.sx1;) {
+      const c = Math.exp(-(((sx - 4) / 18) ** 2));
+      const roll = r(), wr = r(), hr = r(), pr = r();
+      if (roll < 0.14 + 0.12 * c) {
+        // a garden tower
+        const w = 0.42 + wr * 0.18, h = cap(1.9 + hr * (0.8 + 1.0 * c));
+        block(sx, sx + w, null, h - 0.25, P.tower, 0.4);
+        // a planted terrace part way up, and a crown of trees on top
+        const d = 0.5 + pr * 0.15;
+        block(sx - w * 0.7, sx + w * 1.7, h * d - 0.08, h * d + 0.08, P.disc, 0);
+        crown(sx + w / 2, w * 1.15, h - 0.3, 0.55, P.crown, 3);
+        sx += w + 0.35 + r() * 0.4;
+      } else if (roll < 0.55) {
+        // trees, in a clump
+        const rx = 0.45 + wr * 0.5;
+        crown(sx + rx, rx, 0, 0.45 + hr * 0.4, pick(r, P.tree), 3);
+        sx += rx * (1.5 + pr * 0.5);
+      } else {
+        // a low planted block
+        const w = 0.8 + wr * 1.1, h = 0.45 + hr * (0.4 + 0.5 * c);
+        block(sx, sx + w, null, h, pick(r, P.block), 0.5);
+        // (a clump of green on its roof; not on phones, to keep the far
+        // district no more triangles than the old one)
+        const rx = r();
+        if (pr < 0.6 && !LITE) crown(sx + w * (0.3 + 0.4 * rx), 0.32, h - 0.05, 0.22, P.roof, 2);
+        sx += w + (r() < 0.3 ? 0.12 : 0.02);
+      }
+    }
+  } else {
+    // the old skyline (thinned while it is taken down; whiter under snow)
+    const pal = variant === 'snow' ? FAR_PAL.snow : FAR_PAL.old;
+    const thin = variant === 'thin';
+    const r = rng(911);
+    for (let sx = FAR.sx0; sx < FAR.sx1;) {
+      const c = Math.exp(-(((sx - 4) / 16) ** 2));
+      const roll = r(), wr = r(), hr = r(), pr = r(), cr = r(), kr = r();
+      const tower = roll < 0.12 + 0.2 * c;
+      const w = tower ? 0.42 + wr * 0.38 : 0.7 + wr * 1.2;
+      const gap = roll > 0.93;
+      if (!gap && !(thin && kr < 0.45)) {
+        const top = pick(r, pal);
+        if (tower) {
+          const h = cap(1.5 + hr * (0.9 + 1.3 * c));
+          if (pr < 0.5) {
+            // a setback near the top
+            const s = 0.7 + cr * 0.15;
+            block(sx, sx + w, null, h * s, top);
+            block(sx + w * 0.15, sx + w * 0.85, h * s - 0.02, h, top, 0);
+          } else block(sx, sx + w, null, h, top);
+        } else {
+          block(sx, sx + w, null, cap(0.45 + hr * (0.7 + 1.1 * c) + (cr < 0.15 ? 0.6 : 0)), top);
+        }
+      } else r();
+      sx += w + (cr > 0.75 ? 0.1 + pr * 0.25 : 0.02);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+  // (all of it faces the camera's way, square to the street)
+  const nrm = new Float32Array(pos.length);
+  for (let i = 2; i < nrm.length; i += 3) nrm[i] = 1;
+  geo.setAttribute('normal', new THREE.BufferAttribute(nrm, 3));
+  geo.computeBoundingSphere();
+  return geo;
 }
 
 // The river along the bottom of the allotments, glimpsed between the trees,
@@ -460,7 +613,10 @@ export function riverside(p = {}) {
 // Construction cranes
 
 // (mast and arm are a mesh each: the arm turns, so the crane can't be merged whole)
-function crane(h, jib, color = '#e8b923') {
+// `dir`: which way the jib reaches on screen (1 right, -1 left, 0 either, by
+// `seed`). Its angle comes from `seed`, so it is the same on every load.
+function crane(h, jib, color = '#e8b923', { dir = 0, seed = 1 } = {}) {
+  const r = rng(seed);
   const g = new THREE.Group();
   const mast = new Batch();
   mast.box(0.4, h, 0.4, color, 0, 0, 0);
@@ -478,12 +634,15 @@ function crane(h, jib, color = '#e8b923') {
   const light = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), lightM);
   light.position.set(0, 1.4, 0);
   arm.add(light);
-  // Jibs mostly swing across the view, where they read best side-on.
-  arm.rotation.y = (Math.random() - 0.5) * 1.2 + (Math.random() < 0.5 ? 0 : Math.PI);
+  // Jibs swing slowly to and fro across the view, where they read best
+  // side-on (angle 0 reaches right, PI left), never far round towards or
+  // away from the camera.
+  const base = (dir > 0 ? 0 : dir < 0 ? Math.PI : r() < 0.5 ? 0 : Math.PI) + (r() - 0.5) * 0.5;
+  const amp = 0.16 + r() * 0.16, w = 0.05 + r() * 0.04, ph = r() * 6.3;
+  arm.rotation.y = base + amp * Math.sin(ph);
   g.add(arm);
-  const sp = 0.03 + Math.random() * 0.05;
   g.userData.tick = (dt, t) => {
-    arm.rotation.y += dt * sp * Math.sin(t * 0.1);
+    arm.rotation.y = base + amp * Math.sin(t * w + ph);
     light.visible = G.night > 0.3 && Math.sin(t * 2.5) > 0;
   };
   g.userData.h = h + 1;
@@ -492,12 +651,15 @@ function crane(h, jib, color = '#e8b923') {
 
 // at: [[sx, z, height, jib]]. Heights are eased down (7 -> 6, 8 -> 6.5): from
 // this low angle a tall mast's jib runs off the top of a wide screen, under
-// the date card and buttons.
+// the date card and buttons. A crane out towards either side reaches its jib
+// in towards the middle: a phone's view ends just short of the masts at sx
+// -9 and 17, and shows their jibs, not a counterweight hanging on its own.
 export function cranes(p = {}) {
   const g = new THREE.Group();
   g.userData.stagger = true;
   for (const [sx, z, h, jib] of p.at || [[-9, -31.5, 7.5, 6], [17, -34, 8, 6], [27, -29, 7, 5.5]]) {
-    const c = crane(Math.min(h, 6 + (h - 7) * 0.5), jib, p.color);
+    const dir = sx > 8 ? -1 : sx < -4 ? 1 : 0;
+    const c = crane(Math.min(h, 6 + (h - 7) * 0.5), jib, p.color, { dir, seed: 7 + Math.round(sx * 3 - z) });
     place(c, sx, z);
     g.add(c);
   }
@@ -570,7 +732,8 @@ export function meridian(p = {}) {
     for (const y of [1.6, 3.2]) frame.add(mb(W, 0.15, D, plainMist('#8d8a84'), 0, y + 0.4, 0));
     frame.userData.h = 4.5;
     g.add(frame);
-    const c1 = crane(7.4, 7);
+    // (reaching over the site)
+    const c1 = crane(7.4, 7, undefined, { dir: 1, seed: 31 });
     c1.position.set(-3, 0, -2.5);
     g.add(c1);
     const hoard = billboardTex(['MERIDIAN COMPUTE', 'POWERING TOMORROW'], '#14243a', '#9fe0ff', true);
@@ -716,7 +879,7 @@ export function datacentres(p = {}) {
       b.box(w, 0.3, d, '#9c9890', 0, 0, 0);
       for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 4) b.box(0.15, 2.5, 0.15, '#6d7a86', x, 0.3, 0);
       dc.add(b.mesh(batchMat()));
-      const c = crane(6.8, 6);
+      const c = crane(6.8, 6, undefined, { dir: 1, seed: 47 });
       c.position.set(-w / 2, 0, -d / 2 - 1);
       dc.add(c);
     } else {
@@ -802,9 +965,11 @@ const rowScale = (z) => Math.max(0.55, 1 - ((-29.2 - z) / 10.8) * 0.42);
 export function newTowers(p = {}) {
   const g = new THREE.Group();
   g.userData.stagger = true;
-  // [sx, z, height]
+  // [sx, z, height]. The third (half-printed in scene 3, with its gantry)
+  // stands downriver of Meridian, inside a phone's view; the fifth is short
+  // enough that its spire stays under the top edge of a wide screen.
   const spots = [
-    [-3, -33.4, 7.2], [2.6, -35.8, 6.4], [-10.5, -34.2, 6.0], [13.6, -34, 7], [-5.0, -39.6, 7.6], [-17.5, -33.2, 5.8], [19.5, -36.2, 6.4], [9.8, -37.6, 6.8], [-23.5, -32.4, 5.4], [25.5, -34.4, 5.8],
+    [-3, -33.4, 7.2], [2.6, -35.8, 6.4], [13.6, -34, 7], [-10.5, -34.2, 6.0], [-5.0, -39.6, 6.6], [-17.5, -33.2, 5.8], [19.5, -36.2, 6.4], [9.8, -37.6, 6.8], [-23.5, -32.4, 5.4], [25.5, -34.4, 5.8],
   ];
   const n = p.n ?? 3;
   for (let i = 0; i < n; i++) {
