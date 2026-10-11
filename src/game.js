@@ -1283,10 +1283,11 @@ export class Game {
   }
 
   // Markers closer than a fingertip (28px) are pushed apart along the line
-  // between them, each by at most 14px from its own spot, so that each can
-  // still be tapped (people round the kitchen table, the kettle by Pip).
+  // between them, each by at most 14px from its own spot (18px on short
+  // screens, whose room is smaller), so that each can still be tapped
+  // (people round the kitchen table, the kettle by Pip).
   _spreadMarkers(list) {
-    const MIN = 28, CAP = 14;
+    const MIN = 28, CAP = window.innerHeight < 540 ? 18 : 14;
     const live = list.filter((s) => s.live);
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
