@@ -364,6 +364,14 @@ export function swarm(p = {}) {
     const card = c.r > c.l;
     const cl = c.l < 40 ? -1e9 : (c.l - 8 - cx) / ppu, cr = (c.r + 8 - cx) / ppu;
     const ct = c.t < 40 ? 1e9 : 13.5 - (c.t - 8) / ppu, cb = 13.5 - (c.b + 8) / ppu;
+    // ...nor under the moon's marker, which would seem to mark them
+    let mkx = 0, mky = 0, mkr = 0;
+    if (G.time - skyState.moonAt < 0.5) {
+      const mk = moonMarker();
+      mkx = skyState.moonX + mk[0];
+      mky = skyState.moonY + mk[1];
+      mkr = 16 / ppu;
+    }
     let i = 0;
     for (const tr of trains) {
       const P = 2 * W + tr.n * tr.gap + tr.rest;
@@ -375,6 +383,7 @@ export function swarm(p = {}) {
         const yb = tr.y + tr.slope * xn + tr.curve * (xn * xn - 0.4);
         let y = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
         if (card && x > cl && x < cr && y < ct && y > cb) y = -100;
+        if (mkr && Math.abs(x - mkx) < mkr && Math.abs(y - mky) < mkr) y = -100;
         pos[i * 3] = x;
         pos[i * 3 + 1] = y;
         pos[i * 3 + 2] = zAt(dm, x, y, SKY_FRONT - 1.2);
@@ -472,7 +481,12 @@ export function launches(p = {}) {
       L.trail.rotation.z = lean;
       L.head.position.set(-Math.sin(lean) * hgt, Math.cos(lean) * hgt, 0.01);
       const fade = k < 0.8 ? 1 : 1 - (k - 0.8) / 0.2;
-      L.trail.material.opacity = 0.55 * fade * (1 - k * 0.5);
+      // By day the bead would read as a second sun and the thread vanish
+      // against the pale sky: a smaller bead on a wider, stronger thread.
+      const day = 1 - Math.min(1, G.night);
+      L.head.scale.setScalar(1.2 - 0.5 * day);
+      L.trail.scale.x = 1 + 0.8 * day;
+      L.trail.material.opacity = Math.min(1, 0.55 * fade * (1 - k * 0.5) * (1 + 0.6 * day));
       L.head.material.opacity = fade;
     }
   };
@@ -518,7 +532,13 @@ export function flare(p = {}) {
     // kettle's pull-back raises the view, and those come up over the flare
     // just as the radio says it will be visible. (So it rides higher there,
     // up to 85px under the top edge; tall screens have sky to spare.)
-    const y = mix(Math.max(p.y ?? 9.5, belowTop(85)), p.y ?? 9.5, G.tall);
+    // On landscape phones it goes higher still, right under the top edge,
+    // to clear the 2051 garden towers.
+    const top = shortness() > 0.2 ? belowTop(26) : belowTop(60);
+    let y = mix(Math.max(p.y ?? 9.5, top), p.y ?? 9.5, G.tall);
+    // Small phones: under the date card when it would sit beside it.
+    const c = cardRect();
+    if (c.r > c.l && (typeof window !== 'undefined' ? window.innerWidth : 1440) / 2 + x * pxPerUnit() < c.r + 30) y = Math.min(y, belowTop(c.b + 45));
     g.position.y = y;
     g.position.z = zAt(depthMap(g.parent), x, y, SKY_FRONT);
   };

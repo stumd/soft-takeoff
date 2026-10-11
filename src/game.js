@@ -1175,7 +1175,8 @@ export class Game {
     // the room under the date card and the city off the top. They have
     // smaller subtitles to match (style.css).
     const H = window.innerHeight;
-    const short = H <= 540;
+    // (small phones too: there the radio's lines wrap to five)
+    const short = H <= 540 || (window.innerWidth <= 400 && H <= 700);
     const want = Math.max(short ? 0 : window.innerWidth <= 720 ? 132 : 150, H - top + 4);
     this._kettleInsetPx = short ? Math.min(want, Math.round(0.3 * H)) : want;
     return this._kettleInsetPx;
@@ -1288,7 +1289,7 @@ export class Game {
   // screens, whose room is smaller), so that each can still be tapped
   // (people round the kitchen table, the kettle by Pip).
   _spreadMarkers(list) {
-    const MIN = 28, CAP = window.innerHeight < 540 ? 18 : 14;
+    const MIN = 28, CAP = window.innerHeight < 400 ? 20 : window.innerHeight < 540 ? 18 : 14;
     const live = list.filter((s) => s.live);
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;

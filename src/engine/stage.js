@@ -530,8 +530,12 @@ export class Stage {
   _axes() {
     const v = this.view, c = this.cam;
     const az = v.az + c.sway;
-    // Story pull-backs also rise, so the land beyond the city's hill comes into view.
-    const el = Math.min(32 * DEG, v.el + (v.elDrop || 0) * c.lift + (1 - c.extraZoom) * 15 * DEG);
+    // Story pull-backs also rise, so the land beyond the city's hill comes into
+    // view. Where the world's width caps the pull-back (lite, landscape), rise
+    // only as far as the frame actually opened, or the sky drops out of view.
+    const want = (1 - c.extraZoom) * (1 - 0.45 * this.tallness());
+    const share = want > 1e-4 ? Math.min(1, (1 - this.pullback()) / want) : 1;
+    const el = Math.min(32 * DEG, v.el + ((v.elDrop || 0) * c.lift + (1 - c.extraZoom) * 15 * DEG) * share);
     const se = Math.sin(el), ce = Math.cos(el), sa = Math.sin(az), ca = Math.cos(az);
     (this._camDir ||= new THREE.Vector3()).set(ce * sa, se, ce * ca);
     (this._camRight ||= new THREE.Vector3()).set(ca, 0, -sa);
@@ -751,10 +755,12 @@ export class Stage {
     };
     const fits = (list) => (free.sheet ? fitsX(all(list)) && fitsY(all(list)) : !!side(list));
     // What to frame: the subject with the room, else the subject, else its
-    // main object, whichever fits first; failing all, the subject.
+    // main object, else its marker with the room, else the marker alone,
+    // whichever fits first; failing all, the subject.
     const R = boxPx(this.view.room);
+    const mk = focus && focus.points && focus.points.length && main.length > 1 ? main[main.length - 1] : null;
     let L = [R];
-    if (parts.length) L = [[...parts, R], parts, main].find((l) => l.length && fits(l)) || parts;
+    if (parts.length) L = [[...parts, R], parts, main, mk && [mk, R], mk && [mk]].find((l) => l && l.length && fits(l)) || parts;
     const F = all(L);
     // px to move the picture by (right, down)
     let dx = 0, dy = 0;
