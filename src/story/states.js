@@ -179,7 +179,8 @@ STATES[3] = (fr) => [
   E('gchairs', 'gardenChairs', { chairs: [[1.0, -2.6, 0.9]] }),
   E('arthur', 'person', CAST.arthur(3, { pose: 'sit', seat: 0.42, cannula: true, top: '#8a7550' }), [1.0, 0, -2.6], 0.9),
   E('oxygen', 'oxygen', {}, [0.5, 0, -3.2]),
-  E('telescope', 'telescope', { dir: 2.4 }, [3.4, 0, 0.5]),
+  // aimed up and to the right: the south-east, where the launches go up
+  E('telescope', 'telescope', { dir: -0.8 }, [3.4, 0, 0.5]),
   standing('june', 'june', 3, [3.0, 0, 0.95], 2.4, { arms: 'hold' }),
   E('festoon', 'festoon'),
   ...garden({ era: 3, lawn: 'green', tree: 'summer', shed: { solar: true } }),
@@ -279,7 +280,8 @@ STATES[5] = (fr) => [
   E('sold', 'soldBoard', { text: 'SOLD' }, [15.6, 0, 2.6]),
   E('tboxes', 'boxes', { n: 5 }, [12.0, 0, -0.6]),
   E('mvan', 'van', { color: '#d8cfb8', open: true, text: 'SLOW TOWNS' }, [12.6, 0.06, 5.9]),
-  standing('tomasz', 'tomasz', 5, [10.9, 0.06, 4.5], -1.2, { arms: 'hold', top: '#b03a3a' }),
+  // at the foot of the van's ramp, in front of it rather than behind it
+  standing('tomasz', 'tomasz', 5, [9.6, 0.06, 4.4], -1.2, { arms: 'hold', top: '#b03a3a' }),
   E('city', 'city', { variant: 'old' }),
   E('river', 'river', { clean: true }),
   E('riverside', 'riverside', { taken: ['lattice', 'reactor', 'solar', 'factory'] }),
@@ -394,7 +396,8 @@ STATES[8] = (fr) => [
   E('mug2', 'mug', { color: '#c2553d' }, [-5.45, 0.905, -5.6]),
   E('mug3', 'mug', { color: '#3f6b4a' }, [-5.2, 0.905, -5.55]),
   seated('arthur', 'arthur', 8, 1, { top: '#8a7550', arms: 'forward' }),
-  standing('maya', 'maya', 8, [-6.0, 0, -4.9], PI - 0.2, { arms: 'forward' }),
+  // beside the kettle, not in front of it: it boils in full view all through the sequence
+  standing('maya', 'maya', 8, [-5.0, 0, -4.85], PI + 0.76, { arms: 'forward' }),
   standing('june', 'june', 8, [0.55, 0, -2.3], PI / 2 + 0.5, { arms: 'window', top: '#9fc0e8' }),
   E('drawing', 'paper', { drawing: true }, [-4.1, 0.78, -2.85]),
   ...garden({ era: 8, lawn: 'autumn', tree: 'autumn', fallen: true, shed: { solar: true } }),
