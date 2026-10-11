@@ -185,6 +185,10 @@ export class Stage {
       sky: 0, skyT: 0,
     };
 
+    // While the story holds the camera (the kettle, the ending), the
+    // player's drag, pinch, wheel and double-click leave it alone.
+    this.locked = false;
+
     this._makeSky();
     this._makeLights();
 
@@ -328,7 +332,10 @@ export class Stage {
     this.height = h;
     const v = this.view;
     G.tall = this.tallness();
-    v.el = v.elWide + (v.elTall - v.elWide) * G.tall;
+    // Short screens (landscape phones) also look from a little lower, so the
+    // city stands up behind the house with sky above it instead of lying
+    // back into a strip of rooftops.
+    v.el = v.elWide + (v.elTall - v.elWide) * G.tall - 5.5 * DEG * this.shortness();
     this.skyUniforms.uAspect.value = w / h;
     this.renderer.getDrawingBufferSize(mistUniforms.uRes.value);
   }
@@ -394,18 +401,27 @@ export class Stage {
     };
     window.addEventListener('pointerup', up);
     window.addEventListener('pointercancel', up);
-    el.addEventListener('wheel', (e) => {
+    this._onWheel = (e) => {
       if (this.locked) return;
       e.preventDefault();
       this.zoomAbout(this.cam.zoomT * Math.exp(-e.deltaY * 0.0012), e.clientX, e.clientY);
-    }, { passive: false });
-    el.addEventListener('dblclick', () => this.resetView());
+    };
+    this.addWheelTarget(el);
+    el.addEventListener('dblclick', () => { if (!this.locked) this.resetView(); });
+  }
+
+  // Zoom with the wheel over this element too (the hotspot markers, which
+  // sit over the canvas: zooming about the cursor means pointing at things).
+  addWheelTarget(el) {
+    if (el) el.addEventListener('wheel', this._onWheel, { passive: false });
   }
 
   resetView() {
     this.cam.zoomT = 1;
     this.cam.panXT = 0;
     this.cam.panYT = 0;
+    // (an open panel frames its subject again, for the default view)
+    if (this.onViewReset) this.onViewReset();
   }
 
   // The smallest zoom the player can reach: the frame never gets wider than
@@ -440,6 +456,12 @@ export class Stage {
     return clamp((1.0 - this.width / this.height) / 0.5, 0, 1);
   }
 
+  // 0 on screens 540px tall or more, 1 on landscape phones (360px). (sky.js
+  // uses the same measure to place the moon and the lights.)
+  shortness() {
+    return clamp((540 - this.height) / 180, 0, 1);
+  }
+
   // A scene about the sky, or not (see frustumBase). Eases, behind the
   // scene change's veil; the first call (the scene the game opens on) snaps.
   setSkyScene(on) {
@@ -469,11 +491,17 @@ export class Stage {
   frustumBase() {
     const aspect = this.width / this.height;
     // Short screens (landscape phones) close in a little, so the house stays
-    // a size you can read and tap; the top of the skyline gives way. In a
-    // scene about the sky (the moon, the lights in it: cam.sky) they open
-    // out instead, so a strip of sky stays above the city for them.
-    const k = clamp((540 - this.height) / 180, 0, 1);
-    const fr = this.view.frustum - 4 * k + 8 * k * this.cam.sky;
+    // a size you can read and tap (with the lower angle, see _resize, the
+    // skyline and a strip of sky still fit above it). In a scene about the
+    // sky (the moon, the lights in it: cam.sky) they open out instead, for
+    // more sky above the city, but never wider than the built world (lite's
+    // is narrow), whose ends would show.
+    const k = this.shortness();
+    let fr = this.view.frustum - 2 * k;
+    if (k > 0 && this.cam.sky > 0) {
+      const widest = Math.max(fr, (WORLD_SX[1] - WORLD_SX[0] - 1) / aspect);
+      fr = Math.min(fr + 6 * k * this.cam.sky, widest);
+    }
     return Math.max(fr, this.view.fitW / aspect);
   }
 
@@ -610,8 +638,10 @@ export class Stage {
   //          is clear (the date card and the buttons along the top).
   // The room comes too whenever it fits beside the subject. A subject too big
   // for the space keeps its top clear of the date card (sheet) or its middle
-  // in the middle (side panel). Worked out on the frame before any shift,
-  // with the player's zoom and pan.
+  // in the middle (side panel). Beside a side panel the picture only moves
+  // down when the subject is cut by the top of the screen (a tower on a
+  // landscape phone), just far enough to show its top. Worked out on the
+  // frame before any shift, with the player's zoom and pan.
   panelShift(focus, free) {
     // Measured where the camera is heading: the bottom bar's height eases.
     const { bottom, drop } = this.inset;
@@ -647,50 +677,74 @@ export class Stage {
     const union = (a, b) => (!a ? b : !b ? a : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]);
     const fitsX = (r) => r[2] - r[0] <= free.right - free.left;
     const fitsY = (r) => r[3] - r[1] <= free.bottom - free.top;
+    // Beside a side panel, the strip along the top of the screen is narrower
+    // (the date card on its left, the sound and help buttons on its right:
+    // free.band), and a part reaching up into it must also land between
+    // those; below it the free space runs up to the top of the screen.
+    const band = !free.sheet && free.band;
+    const top0 = band ? 8 : free.top; // the highest anything may be brought
     // The subject: what of it is on screen now. Something cut by a side of
     // the screen is taken whole if it would fit; very wide things (the street,
-    // a skyline) only for the part in view.
+    // a skyline) only for the part in view. The same for the top edge (a
+    // tower whose top, or all of it, is just above the frame on a short
+    // screen); the bottom one only ever hides things under the bar or sheet.
     // (each part as a screen rect [x0, y0, x1, y1]; `main`: the first object,
     // which the marker stands on, and the marker)
     const parts = [], main = [];
     for (const b of (focus && focus.boxes) || []) {
       const r = boxPx(b);
-      const vy0 = Math.max(0, r[1]), vy1 = Math.min(H, r[3]);
+      const wholeY = r[1] < 0 && r[3] - r[1] <= free.bottom - top0;
+      const vy0 = wholeY ? r[1] : Math.max(0, r[1]), vy1 = Math.min(H, r[3]);
       const vx0 = Math.max(0, r[0]), vx1 = Math.min(W, r[2]);
-      if (vy1 <= vy0 || vx1 <= vx0) continue;
+      if (vy1 <= vy0 || vx1 <= vx0 || vy1 < -0.5 * H) continue;
       const whole = fitsX(r);
       const v = [whole ? r[0] : vx0, vy0, whole ? r[2] : vx1, vy1];
       parts.push(v);
       if (b === focus.boxes[0]) main.push(v);
     }
+    // (a marker above the frame counts when it tops a part taken whole)
+    const yMin = parts.reduce((a, r) => Math.min(a, r[1] - 30), 0);
     for (const p of (focus && focus.points) || []) {
       const [x, y] = px(p);
-      if (x > 0 && x < W && y > 0 && y < H) {
+      if (x > 0 && x < W && y > yMin && y < H) {
         const m = [x - 14, y - 14, x + 14, y + 14];
         parts.push(m);
         main.push(m);
       }
     }
     const all = (list) => list.reduce((a, r) => union(a, r), null);
-    // Beside a side panel, the strip along the top of the screen is narrower
-    // (the date card on its left, the sound and help buttons on its right:
-    // free.band), and a part reaching up into it must also land between
-    // those. The moves (px to the right) that keep a set of parts in the
-    // free space, or null if none does:
-    const band = !free.sheet && free.band;
-    const range = (list) => {
+    // The moves (px to the right) that keep a set of parts, moved down by
+    // dy, in the free space, or null if none does:
+    const range = (list, dy = 0) => {
       const F = all(list);
       let lo = free.left - F[0], hi = free.right - F[2];
       if (band) {
         for (const r of list) {
-          if (r[1] >= band.bottom) continue;
+          if (r[1] + dy >= band.bottom) continue;
           lo = Math.max(lo, band.left - r[0]);
           hi = Math.min(hi, band.right - r[2]);
         }
       }
       return lo <= hi ? [lo, hi] : null;
     };
-    const fits = (list) => (free.sheet ? fitsX(all(list)) && fitsY(all(list)) : !!range(list));
+    // Beside a side panel: how far down to bring a set cut by the top edge
+    // (none for one in view: those only move sideways), and its sideways
+    // moves; null if it doesn't fit. It comes just under the top edge if
+    // its top can go between the date card and the buttons, else under them.
+    const side = (list) => {
+      const F = all(list);
+      if (F[1] >= 0) {
+        const rg = range(list);
+        return rg && { dy: 0, rg };
+      }
+      for (const top of [top0, band ? band.bottom : top0]) {
+        if (F[3] - F[1] > free.bottom - top) continue;
+        const rg = range(list, top - F[1]);
+        if (rg) return { dy: top - F[1], rg };
+      }
+      return null;
+    };
+    const fits = (list) => (free.sheet ? fitsX(all(list)) && fitsY(all(list)) : !!side(list));
     // What to frame: the subject with the room, else the subject, else its
     // main object, whichever fits first; failing all, the subject.
     const R = boxPx(this.view.room);
@@ -705,8 +759,14 @@ export class Stage {
     } else {
       // centred in the free space, or as near as the top strip allows
       dx = (free.left + free.right) / 2 - (F[0] + F[2]) / 2;
-      const rg = range(L);
-      if (rg) dx = clamp(dx, rg[0], rg[1]);
+      const s = side(L);
+      if (s) {
+        dx = clamp(dx, s.rg[0], s.rg[1]);
+        dy = s.dy;
+      } else if (F[1] < 0) {
+        // too tall for the space: its top comes down under the buttons
+        dy = (band ? band.bottom : top0) - F[1];
+      }
     }
     // Not so far that the uncovered part of the screen shows past the ends of
     // the built world (as the player's pan; see _panLimits).
