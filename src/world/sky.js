@@ -270,7 +270,6 @@ export function swarm(p = {}) {
       for (let k = 0; k < tr.n; k++, i++) {
         const b = 1 - 0.5 * (k / Math.max(1, tr.n - 1));
         col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = b;
-        pos[i * 3 + 2] = 0;
       }
     }
   }
