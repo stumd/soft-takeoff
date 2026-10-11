@@ -513,6 +513,14 @@ export function flare(p = {}) {
       x = fitX(side > 0 ? Math.max(x, spx + 3) : Math.min(x, spx - 3), 2.5);
     }
     g.position.x = x;
+    // Clear of the city's hill, and in front of the far district and the
+    // land that runs back to it, like the moon: on a wide screen the
+    // kettle's pull-back raises the view, and those come up over the flare
+    // just as the radio says it will be visible. (So it rides higher there,
+    // up to 85px under the top edge; tall screens have sky to spare.)
+    const y = mix(Math.max(p.y ?? 9.5, belowTop(85)), p.y ?? 9.5, G.tall);
+    g.position.y = y;
+    g.position.z = zAt(depthMap(g.parent), x, y, SKY_FRONT);
   };
   return g;
 }
