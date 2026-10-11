@@ -352,7 +352,7 @@ export function river(p = {}) {
   for (const [t, dt] of [[0.0, 0.06], [1.0, -0.06]]) {
     const [px, pz] = along(t + dt);
     b.box(1.9, 0.98, 1.6, '#8e8270', px, -0.05, pz, { ry: ang });
-    b.box(2.0, 0.1, 1.7, '#b4a894', px, 0.93, pz, { ry: ang });
+    if (!LITE) b.box(2.0, 0.1, 1.7, '#b4a894', px, 0.93, pz, { ry: ang });
   }
   const bridge = b.mesh(batchMat(0.35));
   g.add(bridge);
