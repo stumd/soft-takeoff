@@ -344,6 +344,46 @@ function green(b, t, x0, x1) {
   for (let tx = x0 + r() * 3; tx < x1; tx += 5 + r() * 3) tree(b, r, t, tx, 24.2 + r() * 1.2, 0.58 + r() * 0.1);
 }
 
+// One column of allotment plots from x to x + 5.2, a pair of them between
+// the back fence (z AZ0) and the river (AZ1), with a path between.
+function allotment(b, r, t, x, AZ0, AZ1) {
+  for (const [z0, z1] of [[AZ0 - 0.4, -11.2], [-11.9, AZ1]]) {
+    const cx = x + 2.6;
+    // beds
+    const beds = LITE ? 2 : 2 + Math.floor(r() * 2);
+    for (let k = 0; k < beds; k++) {
+      const bz = z1 + 0.6 + (k + 0.5) * ((z0 - z1 - 1.2) / beds);
+      b.box(4.2, 0.12, 0.7, t.snow ? '#f6f8fa' : '#6a4e38', cx - 0.2, 0, bz);
+      if (t.snow) continue;
+      // a row of crops: a strip on phones, little plants elsewhere
+      if (LITE) b.box(3.8, 0.22, 0.32, t.crop, cx - 0.2, 0.12, bz);
+      else for (let q = 0; q < 5; q++) b.ico(0.16 + r() * 0.08, t.crop, cx - 2 + q * 0.95 + r() * 0.2, 0.2, bz + (r() - 0.5) * 0.3);
+    }
+    const roll = r();
+    if (roll < 0.35) {
+      // a shed
+      const sx = cx + 1.4 * (r() < 0.5 ? -1 : 1);
+      const col = ['#7d5b3e', '#5f7a6a', '#8a7a5a', '#6a5a7a'][Math.floor(r() * 4)];
+      if (!behindRoom(sx, z1 + 0.9, 0.9)) {
+        b.box(1.5, 1.4, 1.2, col, sx, 0, z1 + 0.9);
+        b.roof(1.7, 0.4, 1.4, t.snow ? '#ffffff' : '#3b3f45', sx, 1.4, z1 + 0.9);
+      }
+    } else if (roll < 0.5) {
+      // bean poles
+      if (!behindRoom(cx - 0.5, z1 + 1.0, 0.8)) for (let q = 0; q < 3; q++) b.cyl(0.03, 0.03, 1.8, '#a08a60', cx - 1 + q * 0.5, 0, z1 + 1.0, { seg: 4, rz: (q - 1) * 0.15 });
+    } else if (roll < 0.62 && !t.snow) {
+      // a greenhouse
+      if (!behindRoom(cx + 1.2, z1 + 0.8, 0.9)) {
+        b.box(1.6, 1.2, 1.0, '#d8eef0', cx + 1.2, 0, z1 + 0.8);
+        b.roof(1.7, 0.35, 1.1, '#e8f4f4', cx + 1.2, 1.2, z1 + 0.8);
+      }
+    }
+    if (r() < 0.3) b.cyl(0.25, 0.25, 0.8, '#3a5a3a', cx - 2.2, 0, z0 - 0.4, { seg: 8 });
+  }
+}
+// (a batch that keeps nothing)
+const NOWHERE = { box() {}, roof() {}, cyl() {}, ico() {} };
+
 /**
  * p.tone: lawn tone of the visit (green, autumn, dry, snow, gold, lush).
  * p.era:  index of the visit; early visits have parked cars, later ones more trees.
@@ -416,40 +456,15 @@ export function surrounds(p = {}) {
   b.box(XR - XL, 1.5, 0.08, '#7a5e42', (XL + XR) / 2, 0, AZ0 + 0.2);
   for (let x = XL + 20; x < XR - 20; x += 5.2) {
     if (LITE && (x < -28 || x > 40)) continue;
-    for (const [z0, z1] of [[AZ0 - 0.4, -11.2], [-11.9, AZ1]]) {
-      const cx = x + 2.6, cz = (z0 + z1) / 2;
-      // beds
-      const beds = LITE ? 2 : 2 + Math.floor(r() * 2);
-      for (let k = 0; k < beds; k++) {
-        const bz = z1 + 0.6 + (k + 0.5) * ((z0 - z1 - 1.2) / beds);
-        b.box(4.2, 0.12, 0.7, t.snow ? '#f6f8fa' : '#6a4e38', cx - 0.2, 0, bz);
-        if (t.snow) continue;
-        // a row of crops: a strip on phones, little plants elsewhere
-        if (LITE) b.box(3.8, 0.22, 0.32, t.crop, cx - 0.2, 0.12, bz);
-        else for (let q = 0; q < 5; q++) b.ico(0.16 + r() * 0.08, t.crop, cx - 2 + q * 0.95 + r() * 0.2, 0.2, bz + (r() - 0.5) * 0.3);
-      }
-      const roll = r();
-      if (roll < 0.35) {
-        // a shed
-        const sx = cx + 1.4 * (r() < 0.5 ? -1 : 1);
-        const col = ['#7d5b3e', '#5f7a6a', '#8a7a5a', '#6a5a7a'][Math.floor(r() * 4)];
-        if (!behindRoom(sx, z1 + 0.9, 0.9)) {
-          b.box(1.5, 1.4, 1.2, col, sx, 0, z1 + 0.9);
-          b.roof(1.7, 0.4, 1.4, t.snow ? '#ffffff' : '#3b3f45', sx, 1.4, z1 + 0.9);
-        }
-      } else if (roll < 0.5) {
-        // bean poles
-        if (!behindRoom(cx - 0.5, z1 + 1.0, 0.8)) for (let q = 0; q < 3; q++) b.cyl(0.03, 0.03, 1.8, '#a08a60', cx - 1 + q * 0.5, 0, z1 + 1.0, { seg: 4, rz: (q - 1) * 0.15 });
-      } else if (roll < 0.62 && !t.snow) {
-        // a greenhouse
-        if (!behindRoom(cx + 1.2, z1 + 0.8, 0.9)) {
-          b.box(1.6, 1.2, 1.0, '#d8eef0', cx + 1.2, 0, z1 + 0.8);
-          b.roof(1.7, 0.35, 1.1, '#e8f4f4', cx + 1.2, 1.2, z1 + 0.8);
-        }
-      }
-      if (r() < 0.3) b.cyl(0.25, 0.25, 0.8, '#3a5a3a', cx - 2.2, 0, z0 - 0.4, { seg: 8 });
-    }
+    // (lite: the plots past x 29 lie beyond screen-x 30, the edge of lite's
+    // world that the camera never shows (stage.js WORLD_SX), so they go
+    // nowhere; their random numbers are still drawn, so the rest of the
+    // street comes out the same)
+    allotment(LITE && x > 29 ? NOWHERE : b, r, t, x, AZ0, AZ1);
   }
+  // (lite: one more column of plots on the left, its own random stream, so
+  // a zoomed-out desktop sees plots, not bare grass, out to the world's edge)
+  if (LITE) allotment(b, rng(405), t, XL + 20 + 8 * 5.2, AZ0, AZ1);
   // the path down the middle and the towpath along the river
   b.quad(XL, XR, -11.85, -11.25, t.snow ? '#f7f9fa' : '#b8ad94', 0.0);
   b.quad(XL, XR, -17.2, -16.4, t.snow ? '#f7f9fa' : '#c4b89c', 0.005);
