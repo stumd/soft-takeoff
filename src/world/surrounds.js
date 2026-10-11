@@ -38,7 +38,7 @@ function materials() {
   addMist(lit);
   // the far district: a silhouette against the sky behind it
   const hills = markCached(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  addMist(hills, 1, 0.68);
+  addMist(hills, 1, 0.68, -21.4);
   mats = { body, dark, lit, hills };
   return mats;
 }

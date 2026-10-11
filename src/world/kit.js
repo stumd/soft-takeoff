@@ -77,12 +77,13 @@ const LIGHTS_NO_POINT = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( N
 // drifts slowly, and takes the colour of the sky right behind, so it reads as
 // air rather than as a wall of fog. `k` scales the haze for one material;
 // `sil` instead makes it a silhouette against the sky right behind it (for
-// the furthest flats).
-export function addMist(m, k = 1, sil = 0) {
+// the furthest flats), melting fully into the sky below height `silY`.
+export function addMist(m, k = 1, sil = 0, silY = 0) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, mistUniforms);
     shader.uniforms.uMistK = { value: k };
     shader.uniforms.uSil = { value: sil };
+    shader.uniforms.uSilY = { value: silY };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vMistW;')
       .replace(
@@ -111,7 +112,7 @@ export function addMist(m, k = 1, sil = 0) {
         uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBottom; uniform float uMidPos;
         uniform vec3 uGlowColor; uniform vec2 uGlowPos; uniform float uGlowSize; uniform float uGlowStrength; uniform float uAspect; uniform float uHorizon;
         uniform vec2 uRes; uniform float uMistLow; uniform float uMistHigh; uniform float uFogNear; uniform float uFogFar; uniform float uFogFloor;
-        uniform float uMistK; uniform float uMistTime; uniform float uSil;
+        uniform float uMistK; uniform float uMistTime; uniform float uSil; uniform float uSilY;
         ${SKY_GLSL}
         ${GROUND_GLSL}
         float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
@@ -127,11 +128,15 @@ export function addMist(m, k = 1, sil = 0) {
         // aerial haze: a whole row turns paler, more with each row back
         float fogF = min(0.9, (uFogFloor * 2.2 + 0.2) * pow(dk, 0.85)) * uMistK;
         // ground mist: patchy along each row, deeper and denser further back
-        float n = mistNoise(vec2(vMistW.x * 0.23 + uMistTime * 0.04, vMistW.z * 0.41 - uMistTime * 0.015));
-        float g = groundY(vMistW);
-        float top = g + (uMistLow + uMistHigh * dk) * (0.4 + n);
-        float mistF = (1.0 - smoothstep(g - 0.05, top, vMistW.y)) * smoothstep(0.0, 0.45, dk) * (0.3 + 0.35 * dk + 0.5 * n) * step(-70.0, vMistW.z) * min(1.0, uMistK);
-        mistF = max(mistF, uSil);
+        // (nothing this side of the river, which is most of the screen)
+        float mistF = 0.0;
+        if (dk > 0.0 && vMistW.z > -70.0) {
+          float n = mistNoise(vec2(vMistW.x * 0.23 + uMistTime * 0.04, vMistW.z * 0.41 - uMistTime * 0.015));
+          float g = groundY(vMistW);
+          float top = g + (uMistLow + uMistHigh * dk) * (0.4 + n);
+          mistF = (1.0 - smoothstep(g - 0.05, top, vMistW.y)) * smoothstep(0.0, 0.45, dk) * (0.3 + 0.35 * dk + 0.5 * n) * min(1.0, uMistK);
+        }
+        if (uSil > 0.0) mistF = max(mistF, mix(uSil, 1.0, 1.0 - smoothstep(uSilY - 3.5, uSilY, vMistW.y)));
         fogF *= 1.0 - uSil;
         float w = fogF * (1.0 - mistF) + mistF;
         if (w > 0.003) {
