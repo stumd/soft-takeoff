@@ -180,6 +180,10 @@ export class Stage {
       shiftY: 0, shiftYT: 0, // vertical shift when the bottom sheet is open (phones)
       extraZoom: 1, // story-driven zoom (kettle sequence, ending)
       extraPanY: 0,
+      // 0..1: how much of short screens' lower angle (view.elDrop) the story
+      // gives back. The ending's pull-back takes in the whole world, and
+      // from the lower angle the far district sinks into the haze there.
+      lift: 0,
       // 1 in a scene about the sky (the moon, the lights): short screens open
       // out to keep a strip of it above the city (see frustumBase)
       sky: 0, skyT: 0,
@@ -334,8 +338,9 @@ export class Stage {
     G.tall = this.tallness();
     // Short screens (landscape phones) also look from a little lower, so the
     // city stands up behind the house with sky above it instead of lying
-    // back into a strip of rooftops.
-    v.el = v.elWide + (v.elTall - v.elWide) * G.tall - 5.5 * DEG * this.shortness();
+    // back into a strip of rooftops. (The ending gives it back: cam.lift.)
+    v.elDrop = 5.5 * DEG * this.shortness();
+    v.el = v.elWide + (v.elTall - v.elWide) * G.tall - v.elDrop;
     this.skyUniforms.uAspect.value = w / h;
     this.renderer.getDrawingBufferSize(mistUniforms.uRes.value);
   }
@@ -526,7 +531,7 @@ export class Stage {
     const v = this.view, c = this.cam;
     const az = v.az + c.sway;
     // Story pull-backs also rise, so the land beyond the city's hill comes into view.
-    const el = Math.min(32 * DEG, v.el + (1 - c.extraZoom) * 15 * DEG);
+    const el = Math.min(32 * DEG, v.el + (v.elDrop || 0) * c.lift + (1 - c.extraZoom) * 15 * DEG);
     const se = Math.sin(el), ce = Math.cos(el), sa = Math.sin(az), ca = Math.cos(az);
     (this._camDir ||= new THREE.Vector3()).set(ce * sa, se, ce * ca);
     (this._camRight ||= new THREE.Vector3()).set(ca, 0, -sa);

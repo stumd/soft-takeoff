@@ -1083,7 +1083,7 @@ export class Game {
     const cam = this.stage.cam;
     this.stage.locked = true;
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
-    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 0.8 * k; } });
+    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 0.8 * k; cam.lift = k; } });
     const end = $('ending');
     end.classList.remove('hidden');
     const lines = $('end-lines');
@@ -1110,6 +1110,7 @@ export class Game {
     $('tools').classList.remove('hidden');
     this.stage.cam.extraZoom = 1;
     this.stage.cam.extraPanY = 0;
+    this.stage.cam.lift = 0;
     this.stage.locked = false;
     this.state = 'scene';
     this.busy = false;
