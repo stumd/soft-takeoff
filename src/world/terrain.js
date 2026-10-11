@@ -14,8 +14,12 @@ export const xAt = (sx, z) => (sx + z * SA) / CA;
 export const sxOf = (x, z) => x * CA - z * SA;
 
 // The hill rises from z0 to z1, highest (by ck) around screen-x cx; past the
-// crest the land falls away out of sight (it is where the Spindle stands).
-export const HILL = { z0: -27.5, z1: -41, h: 0.85, cx: 6, cw: 15, ck: 0.55, crest: -41.6, fall: 0.85 };
+// crest the land falls gently away (by `fall` per unit) to the far district
+// at z = -95, where it is about as low as the district's foot. From a
+// landscape screen that slope hides behind the crest; from higher up (tall
+// screens, the story's pull-backs) it shows as a long hazy rise between the
+// crest and the far district, with the Spindle standing on it.
+export const HILL = { z0: -27.5, z1: -41, h: 0.85, cx: 6, cw: 15, ck: 0.55, crest: -41.6, fall: 0.42 };
 
 const smooth = (t) => t * t * (3 - 2 * t);
 

@@ -1,4 +1,4 @@
-import { THREE, cyl, group, textTex, windowTex, emissiveWindowTex, addMist, markCached, drawnTexture } from './kit.js';
+import { THREE, group, textTex, windowTex, emissiveWindowTex, addMist, markCached, drawnTexture } from './kit.js';
 import { Batch } from './batch.js';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { G } from '../engine/stage.js';
@@ -344,25 +344,42 @@ export function river(p = {}) {
     const [px, pz] = along(0.5, side);
     b.box(0.12, 0.3, len + 0.6, '#b4a894', px, 1.17, pz, { ry: ang });
   }
-  for (const t of [0.0, 0.36, 0.64, 1.0]) {
+  // two piers in the water, and a solid abutment at each end, deck to ground
+  for (const t of [0.36, 0.64]) {
     const [px, pz] = along(t);
-    b.box(1.4, 0.95, 0.5, '#9a8e7a', px, 0, pz, { ry: ang });
+    b.box(1.4, 0.95, 0.5, '#9a8e7a', px, -0.1, pz, { ry: ang });
   }
-  const bridge = b.mesh(batchMat(0.7));
+  for (const [t, dt] of [[0.0, 0.06], [1.0, -0.06]]) {
+    const [px, pz] = along(t + dt);
+    b.box(1.9, 0.98, 1.6, '#8e8270', px, -0.05, pz, { ry: ang });
+    b.box(2.0, 0.1, 1.7, '#b4a894', px, 0.93, pz, { ry: ang });
+  }
+  const bridge = b.mesh(batchMat(0.35));
   g.add(bridge);
   g.userData.h = 1.5;
   return g;
 }
 
 // ---------------------------------------------------------------------------
+// More data centres along the far bank, in the order they are built:
+// [sx, z, w, d] (before their 0.78 scale). The first two stand in a row
+// upriver of Meridian, where a phone's narrow view still takes them in; the
+// third stands up the slope behind the solar farm's front rows (scenes 2-3,
+// when the farm is only those rows), not among its panels.
+const DC_SPOTS = [[-1.65, -26.4, 7.0, 4.5], [-7.7, -26.6, 6.0, 4.2], [19.4, -29.3, 6.0, 3.0]];
+const DC_SCALE = 0.78;
+// The factory (scenes 3-8), upriver of the data centres.
+const FACTORY = { sx: -13.75, z: -24.4, s: 0.72 };
+const dcSite = ([sx, , w]) => [sx - (w * DC_SCALE) / 2 - 0.3, sx + (w * DC_SCALE) / 2 + 0.3];
+
 // The far bank between the big sites: old riverside sheds and boatyards,
 // stacked containers, a few cottages, and trees along the embankment road.
 // `taken` lists the sites that stand on the bank in this visit; the old
 // riverside fills whatever they leave. `green`: the epilogue's parkland.
 
 const SITES = {
-  meridian: [1.2, 11.8], lattice: [1.2, 11.8], lake: [-2.6, 15.6], dc0: [-8, -0.4], dc1: [16.4, 22.8], dc2: [-22.8, -16.2],
-  reactor: [10.8, 16.6], factory: [-16, -7.6], solar: [15.2, 30],
+  meridian: [1.2, 11.8], lattice: [1.2, 11.8], lake: [-2.6, 15.6], dc0: dcSite(DC_SPOTS[0]), dc1: dcSite(DC_SPOTS[1]), dc2: dcSite(DC_SPOTS[2]),
+  reactor: [10.8, 16.6], factory: [FACTORY.sx - 4.5 * FACTORY.s - 0.4, FACTORY.sx + 4.5 * FACTORY.s + 0.4], solar: [15.2, 30],
 };
 
 export function riverside(p = {}) {
@@ -412,7 +429,7 @@ export function riverside(p = {}) {
       const wall = kind === 'boathouse' ? '#7a5e48' : pick(r, PAL.ware);
       batch.box(w, h, d, wall, x, 0, zc);
       batch.roof(w + 0.1, 0.32 * d, d + 0.15, p.snow ? '#f2f5f8' : green ? '#6f9a55' : pick(r, [ROOF.slate, ROOF.lead, '#7d8288']), x, h, zc);
-      batch.box(0.7, 0.55, 0.03, '#3a3e44', xAt(cx - w * 0.2, zc + d / 2), 0, zc + d / 2 + 0.01);
+      if (!LITE) batch.box(0.7, 0.55, 0.03, '#3a3e44', xAt(cx - w * 0.2, zc + d / 2), 0, zc + d / 2 + 0.01);
       maxH = Math.max(maxH, h + 0.8);
     } else if (kind === 'yard') {
       const cols = ['#b8443a', '#2f6a8a', '#c8a03a', '#5a7a5a', '#8a8f96'];
@@ -473,12 +490,14 @@ function crane(h, jib, color = '#e8b923') {
   return g;
 }
 
-// at: [[sx, z, height, jib]]
+// at: [[sx, z, height, jib]]. Heights are eased down (7 -> 6, 8 -> 6.5): from
+// this low angle a tall mast's jib runs off the top of a wide screen, under
+// the date card and buttons.
 export function cranes(p = {}) {
   const g = new THREE.Group();
   g.userData.stagger = true;
   for (const [sx, z, h, jib] of p.at || [[-9, -31.5, 7.5, 6], [17, -34, 8, 6], [27, -29, 7, 5.5]]) {
-    const c = crane(h, jib, p.color);
+    const c = crane(Math.min(h, 6 + (h - 7) * 0.5), jib, p.color);
     place(c, sx, z);
     g.add(c);
   }
@@ -551,40 +570,50 @@ export function meridian(p = {}) {
     for (const y of [1.6, 3.2]) frame.add(mb(W, 0.15, D, plainMist('#8d8a84'), 0, y + 0.4, 0));
     frame.userData.h = 4.5;
     g.add(frame);
-    const c1 = crane(8.5, 7);
+    const c1 = crane(7.4, 7);
     c1.position.set(-3, 0, -2.5);
     g.add(c1);
     const hoard = billboardTex(['MERIDIAN COMPUTE', 'POWERING TOMORROW'], '#14243a', '#9fe0ff', true);
-    const bb = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 1.4), new THREE.MeshLambertMaterial({ map: hoard, emissive: '#ffffff', emissiveMap: hoard, emissiveIntensity: 0.4 }));
+    const bb = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 2.0), new THREE.MeshLambertMaterial({ map: hoard, emissive: '#ffffff', emissiveMap: hoard, emissiveIntensity: 0.4 }));
     bb.material.userData.nightK = 0.9;
     // on tall legs at the downriver corner of the site, where it can be read
     // from the street (and from beside the title)
-    bb.position.set(5.6, 4.2, D / 2 + 0.8);
+    bb.position.set(5.6, 4.5, D / 2 + 0.8);
     g.add(group(bb, mb(0.16, 3.5, 0.16, plainMist('#444'), 3.7, 0, D / 2 + 0.8), mb(0.16, 3.5, 0.16, plainMist('#444'), 7.5, 0, D / 2 + 0.8)));
     return g;
   }
   if (stage === 'lake') {
     // A lake with a wooded rim; the far shore is a gentle rise, so from across
     // the river the water reads as a bright band between the trees.
-    const water = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.2, 28), plainMist('#86cadb', { k: 0.6 }));
+    const seg = LITE ? 18 : 28;
+    const water = new THREE.Mesh(new THREE.CylinderGeometry(7, 7, 0.2, seg), plainMist('#86cadb', { k: 0.6 }));
     water.scale.set(1.15, 1, 0.55);
     water.position.y = 1.0;
     g.add(water);
-    const shore = new THREE.Mesh(new THREE.CylinderGeometry(8.4, 9.4, 1.0, 28), plainMist('#7fae5a', { k: 0.7 }));
+    const shore = new THREE.Mesh(new THREE.CylinderGeometry(8.4, 9.4, 1.0, seg), plainMist('#7fae5a', { k: 0.7 }));
     shore.scale.set(1.15, 1, 0.6);
     shore.position.y = 0.45;
     g.add(shore);
+    // the trees round the rim and the herons: one mesh
+    const hb = new Batch();
     const r = rng(8);
     for (let i = 0; i < 22; i++) {
       const a = (i / 22) * Math.PI * 2;
       if (Math.sin(a) > 0.55) continue; // keep the near shore open
-      g.add(placeIco(0.6 + r() * 0.5, ['#5f9a4a', '#7fae4a'][i % 2], Math.cos(a) * 8.3, 1.3 + r() * 0.4, Math.sin(a) * 4.6));
+      hb.ico(0.6 + r() * 0.5, ['#5f9a4a', '#7fae4a'][i % 2], Math.cos(a) * 8.3, 1.3 + r() * 0.4, Math.sin(a) * 4.6);
     }
-    // a heron or two
-    for (const [x, z] of [[-2.5, 1.2], [3.2, 0.4]]) {
-      g.add(mb(0.12, 0.7, 0.12, plainMist('#d8dde0'), x, 1.05, z));
-      g.add(mb(0.4, 0.18, 0.18, plainMist('#c8ced2'), x + 0.12, 1.7, z));
+    // a heron or two, standing in the shallows: long legs, a hunched grey
+    // body, an S of neck and a long yellow bill
+    for (const [x, z, f] of [[-2.5, 1.2, 1], [3.2, 0.4, -1]]) {
+      if (LITE) hb.box(0.1, 0.42, 0.035, '#5a5650', x, 1.05, z);
+      else for (const dx of [-0.06, 0.06]) hb.box(0.035, 0.42, 0.035, '#5a5650', x + dx, 1.05, z);
+      hb.box(0.5, 0.24, 0.22, '#9ea8b0', x - 0.04 * f, 1.43, z, { rz: 0.32 * f });
+      hb.box(0.18, 0.1, 0.18, '#2e3236', x - 0.28 * f, 1.47, z, { rz: 0.5 * f });
+      hb.box(0.07, 0.36, 0.07, '#d8dde0', x + 0.2 * f, 1.58, z, { rz: -0.35 * f });
+      hb.box(0.15, 0.11, 0.12, '#e6eaec', x + 0.3 * f, 1.9, z);
+      hb.box(0.26, 0.04, 0.04, '#e0b23a', x + 0.48 * f, 1.92, z, { rz: -0.12 * f });
     }
+    g.add(hb.mesh(batchMat()));
     g.userData.h = 2;
     return g;
   }
@@ -595,7 +624,11 @@ export function meridian(p = {}) {
   const body = group(mb(len, 4, D, dark, -W / 2 + len / 2, 0, 0));
   body.userData.h = 4;
   g.add(body);
-  for (let x = -W / 2 + 0.4; x < -W / 2 + len; x += 0.55) g.add(mb(0.12, 3.8, 0.1, fin, x, 0, D / 2 + 0.05));
+  // (the fins in one piece, so they merge into a single draw call)
+  const fins = new THREE.Group();
+  for (let x = -W / 2 + 0.4; x < -W / 2 + len; x += LITE ? 0.8 : 0.55) fins.add(mb(0.12, 3.8, 0.1, fin, x, 0, D / 2 + 0.05));
+  fins.userData.h = 4;
+  g.add(fins);
   // the logo strip
   const logo = billboardTex(['MERIDIAN'], '#0c1622', '#7fe6ff', false);
   if (full) {
@@ -603,21 +636,23 @@ export function meridian(p = {}) {
     lm.position.set(0, 3.2, D / 2 + 0.12);
     g.add(lm);
   }
-  // Roof stacks with steam.
+  // Roof stacks with steam (the stacks one mesh).
   const stacks = full ? 6 : 2;
+  const roof = new THREE.Group();
+  const sb = new Batch();
   for (let i = 0; i < stacks; i++) {
     const x = -W / 2 + 1 + i * 1.8;
-    const s = new THREE.Group();
-    s.add(cyl(0.45, 0.6, 1.4, '', { mat: plainMist('#9aa3ab'), cast: false, receive: false }));
-    s.position.set(x, 4, -0.5);
+    sb.cyl(0.45, 0.6, 1.4, '#9aa3ab', x, 0, -0.5, { seg: LITE ? 8 : 12 });
     if (p.steam !== false) {
       const pl = plume({ rise: 6, size: 2.2, speed: 0.1 + i * 0.01, opacity: 0.5 });
-      pl.position.y = 1.4;
-      s.add(pl);
+      pl.position.set(x, 1.4, -0.5);
+      roof.add(pl);
     }
-    s.userData.h = 2;
-    g.add(s);
   }
+  roof.add(sb.mesh(batchMat()));
+  roof.position.y = 4;
+  roof.userData.h = 2;
+  g.add(roof);
   if (stage === 'dismantling') {
     // robot gantries taking it apart, panel by panel
     for (const x of [-1, 2.5]) {
@@ -629,38 +664,67 @@ export function meridian(p = {}) {
       gt.userData.h = 6.3;
       g.add(gt);
     }
-    for (let i = 0; i < 8; i++) g.add(mb(0.9, 0.4, 0.9, plainMist('#4c5866'), 1 + (i % 4) * 1.1, 0, -1 + Math.floor(i / 4) * 1.1));
+    const pile = new THREE.Group();
+    for (let i = 0; i < 8; i++) pile.add(mb(0.9, 0.4, 0.9, plainMist('#4c5866'), 1 + (i % 4) * 1.1, 0, -1 + Math.floor(i / 4) * 1.1));
+    pile.userData.h = 1;
+    g.add(pile);
   }
   return g;
 }
 
+// A hoarding's slogan; `graffiti`: with WHOSE? sprayed under it in red (on a
+// taller board, so the slogan keeps its size).
 function billboardTex(lines, bg, fg, graffiti) {
-  return textTex('city-bb-' + lines.join('|') + (graffiti ? 'g' : ''), lines, { w: 1024, h: 320, bg, fg, font: '800 76px "Inter", Arial, sans-serif' });
+  const o = { w: 1024, h: 320, bg, fg, font: '800 76px "Inter", Arial, sans-serif' };
+  if (graffiti) Object.assign(o, { h: 445, shift: -62, extra: sprayWhose });
+  return textTex('city-bb-' + lines.join('|') + (graffiti ? 'g' : ''), lines, o);
 }
 
-// More data centres along the far bank, each with its own plume.
+function sprayWhose(ctx, w, h) {
+  ctx.save();
+  ctx.translate(w * 0.6, h * 0.79);
+  ctx.rotate(-0.07);
+  ctx.font = 'italic 900 112px "Inter", "Arial Black", Arial, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.lineJoin = 'round';
+  // a soft overspray, then the paint, then a few drips
+  ctx.shadowColor = 'rgba(232, 40, 32, 0.9)';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#e8322a';
+  ctx.fillText('WHOSE?', 0, 0);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff4a3a';
+  ctx.fillText('WHOSE?', -2, -2);
+  ctx.fillStyle = '#e8322a';
+  for (const [x, len] of [[-150, 34], [-62, 22], [18, 40], [104, 26], [170, 18]]) ctx.fillRect(x, 40, 5, len);
+  ctx.restore();
+}
+
+// More data centres along the far bank (see DC_SPOTS), each with its plumes.
 export function datacentres(p = {}) {
   const g = new THREE.Group();
   g.userData.stagger = true;
-  // [sx, z, w, d]
-  const spots = [[-4.2, -26.6, 7.5, 4.5], [19.6, -26.2, 6.5, 4], [-19.5, -27, 7, 4], [27, -27.2, 6, 4]];
-  const n = p.n ?? 3;
+  const n = Math.min(p.n ?? 3, DC_SPOTS.length);
   for (let i = 0; i < n; i++) {
-    const [sx, z, w, d] = spots[i];
+    const [sx, z, w, d] = DC_SPOTS[i];
     const dc = new THREE.Group();
     const building = i === 0 && p.building;
+    // (each one mesh, its colours in its vertices)
+    const b = new Batch();
     if (building) {
-      dc.add(mb(w, 0.3, d, plainMist('#9c9890'), 0, 0, 0));
-      for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 4) dc.add(mb(0.15, 2.5, 0.15, plainMist('#6d7a86'), x, 0.3, 0));
-      const c = crane(7.5, 6);
+      b.box(w, 0.3, d, '#9c9890', 0, 0, 0);
+      for (let x = -w / 2; x <= w / 2 + 0.01; x += w / 4) b.box(0.15, 2.5, 0.15, '#6d7a86', x, 0.3, 0);
+      dc.add(b.mesh(batchMat()));
+      const c = crane(6.8, 6);
       c.position.set(-w / 2, 0, -d / 2 - 1);
       dc.add(c);
     } else {
-      dc.add(mb(w, 3.2, d, plainMist('#46525f'), 0, 0, 0));
-      for (let x = -w / 2 + 0.3; x < w / 2; x += 0.5) dc.add(mb(0.1, 3.0, 0.08, plainMist('#5d6b7a'), x, 0, d / 2 + 0.04));
+      b.box(w, 3.2, d, '#46525f', 0, 0, 0);
+      for (let x = -w / 2 + 0.3; x < w / 2; x += LITE ? 0.75 : 0.5) b.box(0.1, 3.0, 0.08, '#5d6b7a', x, 0, d / 2 + 0.04);
+      for (let k = 0; k < 3; k++) b.cyl(0.35, 0.45, 1.1, '#9aa3ab', -w / 2 + 1 + k * 1.6, 3.2, 0, { seg: 8 });
+      dc.add(b.mesh(batchMat()));
       for (let k = 0; k < 3; k++) {
-        const st = cyl(0.35, 0.45, 1.1, '', { mat: plainMist('#9aa3ab'), x: -w / 2 + 1 + k * 1.6, y: 3.2, z: 0, cast: false, receive: false });
-        dc.add(st);
         if (p.steam !== false) {
           const pl = plume({ rise: 5, size: 1.8, speed: 0.11 + k * 0.013 });
           pl.position.set(-w / 2 + 1 + k * 1.6, 4.3, 0);
@@ -669,8 +733,10 @@ export function datacentres(p = {}) {
       }
     }
     dc.userData.h = 4.5;
-    dc.scale.setScalar(0.78);
+    dc.scale.setScalar(DC_SCALE);
     place(dc, sx, z);
+    // up the solar farm's slope, it stands on the slope
+    if (z < SOLAR.Z0 - 4) dc.position.y = solarY(z + (d * DC_SCALE) / 2) - 0.05;
     g.add(dc);
   }
   return g;
@@ -691,13 +757,19 @@ export function reactor(p = {}) {
   return g;
 }
 
-// The solar farm "past the ring road", on a gentle slope downriver.
+// The solar farm "past the ring road", on a gentle slope downriver. Two
+// blocks of rows side by side; while there are only eight rows (scenes 2-3),
+// the front four of each, with the third data centre up the slope behind.
+const SOLAR = { SLOPE: 0.2, Z0: -22.5, D: 9 };
+const solarY = (z) => (SOLAR.Z0 - z) * Math.tan(SOLAR.SLOPE);
+
 export function solarField(p = {}) {
   const g = new THREE.Group();
   g.userData.stagger = true;
   const rows = p.rows ?? 8;
-  const SLOPE = 0.2, Z0 = -22.5, D = 9;
-  const yAt = (z) => (Z0 - z) * Math.tan(SLOPE);
+  const { SLOPE, Z0, D } = SOLAR;
+  const yAt = solarY;
+  const perBlock = rows > 8 ? 6 : 4;
   const hill = new THREE.Group();
   const hb = new Batch();
   hb.box(15, 0.4, D / Math.cos(SLOPE) + 0.4, p.snow ? '#e8edf0' : '#8f9f66', xAt(22.4, Z0 - D / 2), yAt(Z0 - D / 2) - 0.4, Z0 - D / 2, { rx: SLOPE });
@@ -707,7 +779,7 @@ export function solarField(p = {}) {
   const pm = plainMist('#2a3d62', { k: 0.7 });
   for (let i = 0; i < rows; i++) {
     const row = new THREE.Group();
-    const z = Z0 - 0.8 - (i % 6) * 1.35;
+    const z = Z0 - 0.8 - (i % perBlock) * 1.35;
     const n = 4;
     for (let k = 0; k < n; k++) {
       const pn = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.06, 0.9), pm);
@@ -716,7 +788,7 @@ export function solarField(p = {}) {
       row.add(pn);
     }
     row.userData.h = 1;
-    place(row, i < 6 ? 16.6 : 23.6, z, yAt(z) - groundY(20, z));
+    place(row, i < perBlock ? 16.6 : 23.6, z, yAt(z) - groundY(20, z));
     g.add(row);
   }
   return g;
@@ -732,7 +804,7 @@ export function newTowers(p = {}) {
   g.userData.stagger = true;
   // [sx, z, height]
   const spots = [
-    [-3, -33.4, 7.2], [2.6, -35.8, 6.4], [-10.5, -34.2, 6.6], [13.6, -34, 7], [-6.8, -36.8, 7.6], [-17.5, -33.2, 5.8], [19.5, -36.2, 6.4], [9.8, -37.6, 6.8], [-23.5, -32.4, 5.4], [25.5, -34.4, 5.8],
+    [-3, -33.4, 7.2], [2.6, -35.8, 6.4], [-10.5, -34.2, 6.0], [13.6, -34, 7], [-0.6, -39.4, 7.6], [-17.5, -33.2, 5.8], [19.5, -36.2, 6.4], [9.8, -37.6, 6.8], [-23.5, -32.4, 5.4], [25.5, -34.4, 5.8],
   ];
   const n = p.n ?? 3;
   for (let i = 0; i < n; i++) {
@@ -800,8 +872,8 @@ export function factory(p = {}) {
   }
   g.add(mb(W * 0.6, 1.4, 0.05, nightGlass('#5a6672', '#ff9a3d', 0.8), 0, 0.2, D / 2 + 0.03));
   g.userData.h = 3;
-  g.scale.setScalar(0.8);
-  place(g, -11.8, -24.4);
+  g.scale.setScalar(FACTORY.s);
+  place(g, FACTORY.sx, FACTORY.z);
   return g;
 }
 
@@ -838,12 +910,17 @@ export function lattice(p = {}) {
 }
 
 // The Spindle, far off in the east: a thread of white going up past the top
-// of the sky. It rises from beyond the crest of the hill, thin and bright,
-// ringed every so often with light; faintly self-lit, so it reads by day
-// and glimmers by night.
+// of the sky. It rises from the land beyond the crest of the hill (hidden
+// behind the crest from a landscape screen; seen standing on the far slope
+// from higher up), thin and bright, ringed every so often with light;
+// faintly self-lit, so it reads by day and glimmers by night.
+const SPINDLE = [11.2, -48.5];
+const SPINDLE_FOOT = groundY(SPINDLE[0], SPINDLE[1]) - 0.2;
+
 export function spindle(p = {}) {
   const g = new THREE.Group();
-  const H = p.partial ? 7.5 : 64;
+  // (unfinished, its top ring already up among the tallest towers' spires)
+  const H = p.partial ? 4.3 - SPINDLE_FOOT : 64;
   const m = new THREE.MeshLambertMaterial({ color: '#fbf8f2', emissive: '#fff6e4', emissiveIntensity: 0.55 });
   addMist(m, 0.3);
   const day = new THREE.Color('#fff6e4'), night = new THREE.Color('#8a92a8');
@@ -868,9 +945,9 @@ export function spindle(p = {}) {
   // it grows up out of the ground, as one
   g.userData.h = H;
   g.userData.tick = () => m.emissive.copy(day).lerp(night, Math.min(1, G.night * 0.8));
-  place(g, 11.2, -48.5, -0.2);
+  place(g, SPINDLE[0], SPINDLE[1], -0.2);
   // the hotspot marker: on the thread, a little above the skyline
-  g.userData.anchor = new THREE.Vector3(0, 4.2, 0);
+  g.userData.anchor = new THREE.Vector3(0, -0.6 - SPINDLE_FOOT, 0);
   return g;
 }
 
