@@ -328,9 +328,12 @@ export class World {
     const e = ents[0];
     if (!e.anchor || !e.obj.visible) return null;
     out.copy(e.anchor);
-    if (h.anchor) out.set(h.anchor[0], h.anchor[1], h.anchor[2]);
+    // (a hotspot's anchor may be a function, for markers that move with the
+    // screen's shape, like those in the sky)
+    const a = typeof h.anchor === 'function' ? h.anchor() : h.anchor;
+    if (a) out.set(a[0], a[1], a[2]);
     e.obj.localToWorld(out);
-    if (!h.anchor) out.y += h.lift ?? 0.35;
+    if (!a) out.y += h.lift ?? 0.35;
     return out;
   }
 

@@ -1,8 +1,9 @@
 import { THREE, mat, drawnTexture } from './kit.js';
-import { G } from '../engine/stage.js';
+import { G, skyUniforms } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
 import { puffTex } from './city.js';
+import { xAt } from './terrain.js';
 
 // Things in the sky live on a layer glued to the back of the camera, in
 // screen-ish units: y in [-13.5, 13.5], x in [-13.5 * aspect, 13.5 * aspect].
@@ -11,6 +12,78 @@ import { puffTex } from './city.js';
 export function fitX(x, margin = 2) {
   const lim = Math.max(0, G.skyHalfW - margin);
   return Math.max(-lim, Math.min(lim, x));
+}
+
+const mix = (a, b, t) => a + (b - a) * t;
+const screenH = () => (typeof window !== 'undefined' && window.innerHeight > 0 ? window.innerHeight : 900);
+// Pixels per sky unit: the layer is always 27 units tall, whatever the zoom.
+const pxPerUnit = () => screenH() / 27;
+// The highest a thing's centre may sit: `px` CSS pixels below the top edge.
+const belowTop = (px) => 13.5 - px / pxPerUnit();
+// 0 on screens 540px tall or more, 1 on landscape phones (360px): the same
+// measure the stage uses to open its frame up on short screens.
+const shortness = () => Math.max(0, Math.min(1, (540 - screenH()) / 180));
+
+// Screen x, in sky units, of the city at screen-x `sx` (terrain.js) and
+// depth z: the gaps between its spires are where the moon can go. `sky` is
+// the sky layer (the parent of anything in it), which follows the camera's
+// frame; null before the thing is in it.
+const _w = new THREE.Vector3();
+function skyX(sky, sx, z) {
+  if (!sky) return null;
+  return sky.worldToLocal(_w.set(xAt(sx, z), 0, z)).x;
+}
+
+// Shared between the things in the sky: where the moon is, so that launches
+// do not climb across it.
+const skyState = { moonX: 0, moonAt: -1 };
+
+// Where the night moon sits. Landscape screens have only a strip of sky above
+// the city, and the moon goes in a gap between its spires: the one between
+// the tall spire left of the Lattice and the Lattice's top, or, on landscape
+// phones (whose strip is thinner still, and lower), the one east of the
+// Spindle. Those gaps are in the city, so the moon follows them across
+// screen shapes and the mouse's sway. Tall screens have open sky above the
+// skyline, and it sits there, below the date card. It never rides higher
+// than ~44px below the top edge.
+export function moonSpot(p = {}, sky = null) {
+  const t = G.tall;
+  if (p.x != null) return [fitX(p.x, 2.5), Math.min(p.y - 2.8 * t, belowTop(44))];
+  const short = shortness() > 0.2;
+  const gap = skyX(sky, short ? 16.4 : 4.7, -48) ?? (short ? 12.1 : 1.2);
+  return [fitX(mix(gap, 1.0, t), 2.5), Math.min(mix(11.55, 8.4, t), belowTop(44))];
+}
+
+// The moon's marker, in the moon's own units: above it when there is room
+// under the top edge, otherwise beside it, on the right.
+export function moonMarker() {
+  const [, y] = moonSpot();
+  const room = (13.5 - y - 1.5) * pxPerUnit();
+  return room >= 22 ? [0, 1.5, 0] : [1.75, 0.5, 0];
+}
+
+// The band of sky the swarm's lines cross: high in the strip above the city
+// on landscape screens, and lower, in the open sky, on tall ones.
+export function swarmBand() {
+  const t = G.tall;
+  return [mix(10.0, 5.0, t), Math.min(mix(12.9, 10.6, t), belowTop(10))];
+}
+
+// Where "The lights" marker goes: in that band, in clear sky away from the
+// moon, the Spindle, the Lattice (whose own marker sits just above it in
+// other scenes) and the buttons in the top right corner.
+export function swarmMarker() {
+  const t = G.tall;
+  const ppu = pxPerUnit();
+  if (t > 0.5) return [fitX(-3.1, 1.6), 9.6, 0];
+  if (shortness() > 0.2) {
+    // landscape phones: the moon has the gap east of the Spindle; this goes
+    // just right of the date card
+    return [-G.skyHalfW + 270 / ppu, belowTop(30), 0];
+  }
+  const x = Math.min(mix(13.8, 9.5, t * 2), G.skyHalfW - 150 / ppu);
+  const y = Math.min(mix(11.7, 10.4, t * 2), belowTop(42));
+  return [x, y, 0];
 }
 
 function dotTex() {
@@ -76,11 +149,22 @@ export function moon(p = {}) {
   }
   // Clear of the skyline: high in the band of sky on a landscape screen, a
   // little lower on tall ones, whose frame has more sky above the city.
-  g.position.set(p.x ?? -3, p.y ?? 11, 0);
-  // (and to the right there, clear of the date card)
+  g.position.set(...moonSpot(p), 0);
   g.userData.tick = () => {
-    g.position.x = fitX((p.x ?? -3) + (p.x == null ? 5 * G.tall : 0), 2.5);
-    g.position.y = (p.y ?? 11) - 2.8 * G.tall;
+    const [x, y] = moonSpot(p, g.parent);
+    g.position.x = x;
+    g.position.y = y;
+    skyState.moonX = x;
+    skyState.moonAt = G.time;
+    // The night sky's glow is the moonlight: keep it behind the moon, in the
+    // sky shader's coordinates (whose y starts at the foot of the city).
+    // Only while it is properly night, so that the next scene's light,
+    // blending in as this moon sets, gets its own glow back.
+    if (!p.day && G.night > 0.8) {
+      const hz = skyUniforms.uHorizon.value;
+      const fy = 0.5 + y / 27;
+      skyUniforms.uGlowPos.value.set(0.5 + x / (2 * Math.max(1, G.skyHalfW)), Math.max(0, Math.min(1, (fy - hz) / Math.max(0.05, 1 - hz))));
+    }
   };
   if (p.day) {
     m.transparent = true;
@@ -121,37 +205,79 @@ export function clouds(p = {}) {
   return g;
 }
 
-// The swarm: thousands of small lights in orbit, building something.
+// The swarm: thousands of small lights in orbit, building something. From
+// the garden they cross the sky in slow lines, east to west (right to left),
+// evenly spaced like ants on a trail, never quite colliding. Warmer and
+// bigger than the stars, and brightest at the head of each line, so they
+// read as moving writing rather than more stars. One draw call, as before;
+// lite draws fewer of them, at the old size and without the fading tails.
 export function swarm(p = {}) {
   const g = new THREE.Group();
   const r = rng(1234);
-  const n = p.n ?? 320;
+  const lite = QUALITY.lite;
+  const n = Math.round((p.n ?? 320) * (lite ? 0.6 : 1));
+  const trains = [];
+  for (let left = n; left > 0;) {
+    const k = Math.min(left, 16 + Math.floor(r() * 30));
+    trains.push({
+      n: k,
+      y: 0.18 + r() * 0.64, // height in the band (0 bottom, 1 top)
+      slope: (r() - 0.5) * 0.36, // rise across the screen, in band heights
+      curve: (r() - 0.5) * 0.24,
+      gap: 0.3 + r() * 0.16, // between lights, in sky units
+      speed: 0.35 + r() * 0.45, // sky units a second, westwards
+      rest: 4 + r() * 22, // empty sky before the line comes round again
+      phase: r() * 400,
+      wig: r() * 6.28,
+    });
+    left -= k;
+  }
   const pos = new Float32Array(n * 3);
-  const orbits = [];
-  for (let i = 0; i < n; i++) {
-    orbits.push({ a: r() * Math.PI * 2, sp: (0.02 + r() * 0.05) * (r() < 0.5 ? 1 : -1), band: r() < 0.7 ? 0 : 1, off: (r() - 0.5) * 1.6 });
+  const col = new Float32Array(n * 3);
+  {
+    let i = 0;
+    for (const tr of trains) {
+      for (let k = 0; k < tr.n; k++, i++) {
+        const b = 1 - 0.5 * (k / Math.max(1, tr.n - 1));
+        col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = b;
+        pos[i * 3 + 2] = -0.3; // behind the moon
+      }
+    }
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
-  const m = new THREE.PointsMaterial({ size: 4.2, map: dotTex(), transparent: true, depthWrite: false, fog: false, color: p.color || '#ffe6b0', sizeAttenuation: false, blending: THREE.AdditiveBlending });
-  g.add(new THREE.Points(geo, m));
-  // An invisible band so the lights can be clicked.
-  const hit = new THREE.Mesh(new THREE.PlaneGeometry(70, 5), new THREE.MeshBasicMaterial({ visible: false }));
-  hit.position.y = 10.8;
+  // (lite keeps the stars' shader: no fading tails, no extra program)
+  if (!lite) geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const m = new THREE.PointsMaterial({ size: lite ? 4.2 : 5.6, map: dotTex(), vertexColors: !lite, transparent: true, depthWrite: false, fog: false, color: p.color || '#ffc77a', sizeAttenuation: false, blending: THREE.AdditiveBlending });
+  const pts = new THREE.Points(geo, m);
+  pts.frustumCulled = false;
+  g.add(pts);
+  // An invisible band so the lights can be clicked (behind the moon, so a
+  // click on the moon is the moon's).
+  const hit = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ visible: false }));
+  hit.position.z = -0.5;
   g.add(hit);
   g.userData.tick = (dt, t) => {
-    for (let i = 0; i < n; i++) {
-      const o = orbits[i];
-      o.a += dt * o.sp;
-      // Two orbital bands seen edge-on: flattened ellipses across the sky.
-      const R = o.band ? 30 : 38;
-      const x = Math.cos(o.a) * R;
-      const y = (o.band ? 12 : 9.6) + Math.sin(o.a) * (o.band ? 0.8 : 1.4) + o.off * 0.6;
-      pos[i * 3] = x;
-      pos[i * 3 + 1] = y;
+    const [lo, hi] = swarmBand();
+    const H = Math.max(1, G.skyHalfW);
+    const W = H + 1;
+    let i = 0;
+    for (const tr of trains) {
+      const P = 2 * W + tr.n * tr.gap + tr.rest;
+      const s0 = tr.phase - tr.speed * t;
+      for (let k = 0; k < tr.n; k++, i++) {
+        const u = (((s0 + k * tr.gap) % P) + P) % P;
+        const x = -W + u;
+        const xn = x / H;
+        const yb = tr.y + tr.slope * xn + tr.curve * (xn * xn - 0.4);
+        pos[i * 3] = x;
+        pos[i * 3 + 1] = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
+      }
     }
     geo.attributes.position.needsUpdate = true;
-    m.opacity = (p.day ? 0.35 : 0.9) * (p.fade ?? 1);
+    hit.position.y = (lo + hi) / 2;
+    hit.scale.set(2 * W, hi - lo + 0.8, 1);
+    m.opacity = (p.day ? 0.35 : 0.95) * (p.fade ?? 1);
   };
   return g;
 }
@@ -201,6 +327,10 @@ export function launches(p = {}) {
       const L = pool[idx++ % pool.length];
       L.t = 0;
       L.x = fitX(p.x != null ? p.x + (r() - 0.5) * 6 : 6 + r() * 18, 1.5);
+      // Never up across the moon. (Launches lean left as they climb, so
+      // one starting to its right needs more room.)
+      const dm = L.x - skyState.moonX;
+      if (G.time - skyState.moonAt < 0.5 && dm > -1.8 && dm < 4.6) L.x = fitX(skyState.moonX + (dm < 1.4 ? -1.8 : 4.6), 1.5);
       L.bend = 0.05 + r() * 0.12;
       L.item.position.set(L.x, p.y0 ?? -1, 0);
       next = every * (0.6 + r() * 0.8);

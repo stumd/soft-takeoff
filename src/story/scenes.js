@@ -1,4 +1,5 @@
 import { STATES, fridgeEntity } from './states.js';
+import { swarmMarker, moonMarker } from '../world/sky.js';
 
 // The story. Ten visits to one kitchen. The gaps between them shrink from
 // years to hours, because that is what an intelligence explosion feels like
@@ -87,7 +88,8 @@ export const SCENES = [
         ],
       },
       {
-        id: 'meridian', target: 'meridian', title: 'Across the river', anchor: [0, 7.4, 2],
+        // (on the building site's top deck, not the flats behind it)
+        id: 'meridian', target: 'meridian', title: 'Across the river', anchor: [0, 4.9, 1.5],
         body: [
           'Where the old biscuit factory used to be, something enormous is going up. The cranes have been there since spring. The hoarding says MERIDIAN COMPUTE — POWERING TOMORROW.',
           'Someone has sprayed a word underneath, in red: *WHOSE?*',
@@ -203,7 +205,8 @@ export const SCENES = [
         ],
       },
       {
-        id: 'meridian', target: 'meridian', title: 'Meridian', anchor: [0, 7.4, 2],
+        // (on its cooling stacks: any higher and it sits on the flats behind)
+        id: 'meridian', target: 'meridian', title: 'Meridian', anchor: [0, 6.4, 2],
         body: [
           'Meridian is finished. On hot days it breathes: white plumes from its cooling stacks, lit pink by the sunset. Everybody calls it the Kettle.',
           'There’s a second one going up beside it. Nobody in the house could tell you exactly what they are for. “Training,” says the website. Training what, for what, it doesn’t say.',
@@ -382,7 +385,8 @@ export const SCENES = [
         ],
       },
       {
-        id: 'street', target: 'workers', title: 'The street', isNew: true,
+        // (over the robot on the left: the middle of the pair is the garden fence)
+        id: 'street', target: 'workers', title: 'The street', isNew: true, anchor: [-1.5, 2.0, 5.0],
         body: [
           'Two yellow robots are digging up the road to lay something — power, fibre, “the new grid”. They started at six this morning, they will finish tonight, and the road will be better than it was.',
           'Nobody asked for it, and nobody objected. That is how most things happen now. They happen, and they’re better, and nobody quite remembers deciding.',
@@ -646,14 +650,16 @@ export const SCENES = [
     ],
     hotspots: [
       {
-        id: 'sky', target: 'swarm', title: 'The lights', isNew: true, anchor: [4, 10.5, 0],
+        // (in clear sky in the lights' band, away from the moon, the Spindle
+        // and the Lattice: where that is depends on the screen's shape)
+        id: 'sky', target: 'swarm', title: 'The lights', isNew: true, anchor: swarmMarker,
         body: [
           'They started on Thursday: thousands of small lights crossing the sky in slow lines, east to west, never quite colliding. Orbital construction, the radio says. Mirrors, or collectors, or something that doesn’t have a name yet.',
           'Up close, Pip says, each one is the size of a bus. From the garden they look as if somebody is writing on the night, in a language that doesn’t exist yet.',
         ],
       },
       {
-        id: 'moon', target: 'moon', title: 'The moon', isNew: true, anchor: [0, 1.5, 0],
+        id: 'moon', target: 'moon', title: 'The moon', isNew: true, anchor: moonMarker,
         body: [
           'Look closely at the dark part of the moon. There are lights on it.',
           'The first foundry landed in August. There are forty now. Each one builds the next. In a year, the radio says, you’ll be able to see them in daylight.',
