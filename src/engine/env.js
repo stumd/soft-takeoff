@@ -1,6 +1,12 @@
 import * as THREE from 'three';
 
 // Lighting / sky presets. Each scene picks one; transitions blend between them.
+//
+// Compass: the camera looks north across the street, so east (the Spindle,
+// the launches, the morning) is on the right and west on the left. glowX is
+// the sun's glow across the screen (0 left, 1 right); sunAz is the sun's
+// bearing, 0 from the camera's side (south), +PI/2 east, -PI/2 west. Evening
+// suns set on the left, morning ones rise on the right.
 const C = (h) => new THREE.Color(h);
 
 const base = {
@@ -23,9 +29,9 @@ function preset(p) {
 export const ENV = {
   dusk: preset({
     skyTop: '#272f5c', skyMid: '#9a5f7c', skyBottom: '#f09a66', skyMidPos: 0.55,
-    glowColor: '#ffae6a', glowX: 0.86, glowY: 0.5, glowSize: 0.28, glowStrength: 0.55,
+    glowColor: '#ffae6a', glowX: 0.14, glowY: 0.5, glowSize: 0.28, glowStrength: 0.55,
     fog: '#b8787c', mist: '#d08a76',
-    sunColor: '#ff9a5a', sunIntensity: 2.1, sunAz: 1.85, sunEl: 0.2,
+    sunColor: '#ff9a5a', sunIntensity: 2.1, sunAz: -1.29, sunEl: 0.2,
     hemiSky: '#8f9ad0', hemiGround: '#5a4038', hemiIntensity: 1.0,
     fill: 0.35, exposure: 1.0, night: 0.6, interior: 1,
   }),
@@ -39,7 +45,7 @@ export const ENV = {
   }),
   snow: preset({
     skyTop: '#6f9fd2', skyMid: '#c0d6ea', skyBottom: '#eef3f6',
-    glowColor: '#ffffff', glowX: 0.22, glowY: 0.72, glowSize: 0.3, glowStrength: 0.22,
+    glowColor: '#ffffff', glowX: 0.78, glowY: 0.72, glowSize: 0.3, glowStrength: 0.22,
     fog: '#d2deea', mist: '#e8eef4',
     sunColor: '#fff3e2', sunIntensity: 2.3, sunAz: 0.55, sunEl: 0.38,
     hemiSky: '#e0eaf6', hemiGround: '#b6bfca', hemiIntensity: 1.45,
@@ -63,15 +69,16 @@ export const ENV = {
   }),
   storm: preset({
     skyTop: '#383f4c', skyMid: '#73767f', skyBottom: '#d3a670', skyMidPos: 0.42,
-    glowColor: '#ffbf72', glowX: 0.88, glowY: 0.32, glowSize: 0.2, glowStrength: 0.55,
+    glowColor: '#ffbf72', glowX: 0.12, glowY: 0.32, glowSize: 0.2, glowStrength: 0.55,
     fog: '#7f7e80', mist: '#9c9286',
-    sunColor: '#ffc68c', sunIntensity: 1.5, sunAz: 1.95, sunEl: 0.12,
+    sunColor: '#ffc68c', sunIntensity: 1.5, sunAz: -1.39, sunEl: 0.12,
     hemiSky: '#9aa2ae', hemiGround: '#4e463e', hemiIntensity: 1.05,
     fill: 0.35, exposure: 1.05, night: 0.45, interior: 1,
   }),
   night: preset({
     skyTop: '#03050c', skyMid: '#0c1630', skyBottom: '#1b2a4c',
-    glowColor: '#9ab4ff', glowX: 0.22, glowY: 0.82, glowSize: 0.12, glowStrength: 0.22,
+    // (the moon keeps this glow behind itself while it is up: see sky.js)
+    glowColor: '#9ab4ff', glowX: 0.53, glowY: 0.86, glowSize: 0.12, glowStrength: 0.22,
     fog: '#121d36', mist: '#1a2846',
     sunColor: '#9cb4ff', sunIntensity: 0.7, sunAz: 0.4, sunEl: 0.85,
     hemiSky: '#3a4a7a', hemiGround: '#101420', hemiIntensity: 0.75,
