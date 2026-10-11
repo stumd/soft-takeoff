@@ -13,7 +13,7 @@ import { rng } from '../engine/tween.js';
 const X0 = -8.6, X1 = 16.4;
 const LITE = QUALITY.lite;
 const LX0 = -90, LX1 = 110;
-const DX0 = LITE ? -30 : -44, DX1 = LITE ? 44 : 60;
+const DX0 = LITE ? -18 : -44, DX1 = LITE ? 27 : 60;
 
 function wheel(r, w, color, x, z, y) {
   return cyl(r, r, w, color, { x, y: y - w / 2, z, rx: Math.PI / 2 });
@@ -140,7 +140,7 @@ export function lampPosts(p = {}) {
   });
   const lamps = [{ bulbMat, poolMat }];
   // (None stands right in front of the room.)
-  const xs = p.xs || (LITE ? [-24.0, -15.0, -7.4, 6.0, 15.4, 25.4, 35.4] : [-34.0, -24.0, -15.0, -7.4, 6.0, 15.4, 25.4, 35.4, 45.4]);
+  const xs = p.xs || (LITE ? [-15.0, -7.4, 6.0, 15.4, 25.4] : [-34.0, -24.0, -15.0, -7.4, 6.0, 15.4, 25.4, 35.4, 45.4]);
   for (const x of xs) {
     const l = new THREE.Group();
     l.position.set(x, 0.1, 3.65);

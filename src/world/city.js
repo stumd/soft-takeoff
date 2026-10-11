@@ -173,8 +173,8 @@ export function city(p = {}) {
       // fewer, further apart, out towards the ends of the street
       const edge = Math.min(1, Math.max(0, (Math.abs(sx - CENTRE) - 20) / 22));
       if (roll > 1 - edge * 0.65) return false;
-      // lite: the back rows are sparser
-      if (LITE && ri >= 3 && roll > 0.72) return false;
+      // lite: a little sparser, the back rows most
+      if (LITE && roll > (ri >= 3 ? 0.62 : 0.88)) return false;
       return true;
     };
     const tree = (sx, z, k = 1, rr = r) => {
@@ -392,7 +392,7 @@ export function riverside(p = {}) {
   // trees along the embankment road, with gaps to see the sites through
   for (let sx = SXa; sx < SXb; sx += 1.8 + r() * 2.4) {
     const roll = r(), zr = r();
-    if (roll < (green ? 0.15 : 0.4)) continue;
+    if (roll < (green ? 0.15 : 0.4) + (LITE ? 0.2 : 0)) continue;
     tree(sx, -22.0 + (zr - 0.5) * 0.3, green ? 1.2 : 1);
   }
   flush();
@@ -442,18 +442,21 @@ export function riverside(p = {}) {
 // ---------------------------------------------------------------------------
 // Construction cranes
 
+// (mast and arm are a mesh each: the arm turns, so the crane can't be merged whole)
 function crane(h, jib, color = '#e8b923') {
   const g = new THREE.Group();
-  const cm = plainMist(color);
-  g.add(mb(0.4, h, 0.4, cm, 0, 0, 0));
-  for (let y = 0.6; y < h; y += 1.2) g.add(mb(0.46, 0.06, 0.46, plainMist('#c49a1a'), 0, y, 0));
+  const mast = new Batch();
+  mast.box(0.4, h, 0.4, color, 0, 0, 0);
+  for (let y = 0.6; y < h; y += 1.2) mast.box(0.46, 0.06, 0.46, '#c49a1a', 0, y, 0);
+  g.add(mast.mesh(batchMat()));
   const arm = new THREE.Group();
   arm.position.y = h;
-  arm.add(mb(jib, 0.3, 0.3, cm, jib / 2 - 2, 0, 0));
-  arm.add(mb(1.2, 0.6, 0.6, plainMist('#55585e'), -2.2, -0.3, 0));
-  arm.add(mb(0.6, 1.0, 0.6, cm, 0, 0.3, 0));
-  const cable = mb(0.03, 3, 0.03, plainMist('#333'), jib * 0.6, -3, 0);
-  arm.add(cable);
+  const ab = new Batch();
+  ab.box(jib, 0.3, 0.3, color, jib / 2 - 2, 0, 0);
+  ab.box(1.2, 0.6, 0.6, '#55585e', -2.2, -0.3, 0);
+  ab.box(0.6, 1.0, 0.6, color, 0, 0.3, 0);
+  ab.box(0.03, 3, 0.03, '#333333', jib * 0.6, -3, 0);
+  arm.add(ab.mesh(batchMat()));
   const lightM = new THREE.MeshBasicMaterial({ color: '#ff3b2a' });
   const light = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), lightM);
   light.position.set(0, 1.4, 0);

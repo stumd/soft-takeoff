@@ -203,7 +203,7 @@ function car(b, r, x, z, flip) {
   b.box(2.1, 0.45, 0.95, c, x, 0.27, z);
   b.box(1.25, 0.42, 0.88, c, x + (flip ? 0.15 : -0.15), 0.7, z);
   b.box(1.15, 0.32, 0.9, '#2b3440', x + (flip ? 0.15 : -0.15), 0.76, z);
-  for (const dx of [-0.68, 0.68]) for (const dz of [-0.45, 0.45]) b.cyl(0.2, 0.2, 0.14, '#1d1d1f', x + dx, 0.2, z + dz - 0.07, { rx: Math.PI / 2, seg: 8 });
+  for (const dx of [-0.68, 0.68]) for (const dz of [-0.45, 0.45]) b.cyl(0.2, 0.2, 0.14, '#1d1d1f', x + dx, 0.2, z + dz - 0.07, { rx: Math.PI / 2, seg: LITE ? 5 : 8 });
 }
 
 // The land across the river, which the city stands on: flat along the bank,
