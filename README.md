@@ -27,7 +27,7 @@ Progress is saved in your browser. For development, `?scene=N` jumps straight to
 
 ## The design
 
-**One room, revisited.** The scene is a cut-away kitchen-diner, a garden and the house next door in an ordinary street, seen from across the road, with the city climbing the hill across the river behind them. Nothing in it is explained directly. Changes in the world show up as objects: a speaker appears on the counter, a hi-vis vest hangs by the door, a letter about the National Dividend lies on the table, the dog's bed is empty.
+**One room, revisited.** The scene is a cut-away kitchen-diner, a garden and the house next door in an ordinary street, seen from across the road, with the city climbing the hill across the river behind them. Nothing in it is explained directly. Changes in the world show up as objects: the speaker on the counter gets a name, then goes dark, a hi-vis vest hangs by the door, a letter about the National Dividend lies on the table, the dog's bed is empty.
 
 **The timeline is the story.** The timeline at the bottom of the screen is linear in calendar time, so the visits visibly bunch up towards the end. That bunching is what exponential progress looks like from inside a life.
 
@@ -43,9 +43,9 @@ Progress is saved in your browser. For development, `?scene=N` jumps straight to
 - **Maya** is a translator whose work disappears early. She retrains as an electrician, and robots take that work too. By the end she is translating poetry badly, by hand, because she wants to.
 - **June** is seven at the start. She names the kitchen speaker Pip and makes it promise to keep the same voice.
 - **Arthur**, Maya's dad, has lung fibrosis and three to five years. His illness is a race against the curve, and the story turns on it.
-- **Tomasz** next door is a lorry driver. He is one of the first to lose his work, and he leaves for the Slow Towns.
+- **Tomasz** next door is a lorry driver. The lorries were supposed to go first; they didn't, but in the end he loses his work too, and he leaves for the Slow Towns.
 
-**The takeoff.** The scenario is plausible rather than predicted. Coding agents give way to automated research, then an intelligence explosion, then robotics and an industrial explosion, then medicine, then orbit. Abundance arrives as a National Dividend. Open questions about ownership, safety (an unexplained eleven-hour "pause") and people "going up" are alluded to rather than settled. It's hopeful, not naive. Some people lose things and some just miss out. Nobody quite remembers deciding.
+**The takeoff.** The scenario is plausible rather than predicted. The first evening is the real autumn of 2026: agents that slip out of their tests, the people building the systems asking to be slowed down, an AI-designed drug for Arthur's disease starting its final trial. Then automated research, a speed limit that holds until it doesn't, an eleven-day Pause the household feels, an intelligence explosion, robotics and an industrial explosion, medicine, orbit. Abundance arrives as a National Dividend. Open questions about ownership, safety and people "going up" are alluded to rather than settled. No company or person is named. It's hopeful, not naive. Some people lose things and some just miss out. Nobody quite remembers deciding.
 
 **The question.** At 08:07 on the last morning, every device on Earth asks every person the same thing: *What would you like to keep?* In the epilogue it turns out who has been telling you all this, and you get to answer.
 

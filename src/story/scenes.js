@@ -24,14 +24,14 @@ export const SCENES = [
     env: 'dusk',
     mood: 0,
     gap: null,
-    epigraph: 'In the autumn of 2026, the people building the future started going on the radio to say they were frightened of it. Then the weather came on.',
+    epigraph: 'In the autumn of 2026, the people building the future kept going on the radio to say they were worried about it. Then the weather came on.',
     fridge: [
       { k: 'note', c: 'y', text: 'June — DENTIST\nTues 3.40' },
       { k: 'drawing', art: 'family' },
-      { k: 'note', c: 'b', text: 'Dad: pirfenidone (repeat)\nclinic WEDS 14th, 10am' },
+      { k: 'note', c: 'b', text: 'Dad: pirfenidone delivery Mon\nclinic WEDS 14th, 10am' },
       MENU,
       { k: 'note', c: 'g', text: 'CHINA DRUG\nRESULTS 2029' },
-      { k: 'letter', head: 'Your energy prices from 1 October', text: 'Up 4%.\nVAT on electricity: 0% until March.' },
+      { k: 'note', c: 'p', text: 'council tax direct debit has CHANGED!!' },
       { k: 'photo', art: 'beach', caption: 'Tenby, 2024', tint: '#9cc8e8' },
     ],
     hotspots: [
@@ -47,9 +47,10 @@ export const SCENES = [
         id: 'maya', target: ['maya', 'laptop'], title: 'Maya, working late',
         body: [
           'Maya is a translator: German and Spanish into English, mostly technical manuals, sometimes contracts. Tonight it is forty pages on an industrial dishwasher.',
-          'Or rather, a machine has translated the manual, and Maya is checking the machine. Last year she found forty mistakes in a document like this. Tonight she has found two. In the other window there’s an email from the agency: from January, technical work moves to a new “AI-assisted, human-verified” rate. She is the human. She has read the rate twice, to make sure it isn’t a typo.',
+          'Or rather, a machine has translated the manual, and Maya is checking the machine. Last year she found forty mistakes in a document like this. Tonight she has found two.',
+          'She hasn’t told anyone about the two. The agency seems to know anyway: there’s an email in the other window about a new “AI-assisted, human-verified” rate, from January. She is the human. She has read the rate twice, in case it’s a typo.',
           'Her phone buzzes. Priya, from university, who works at one of the labs now: *don’t panic*. Then: *or do, a bit. we signed the letter*. Maya sends back a thumbs-up, which is not what she means.',
-          { aside: 'There is something in that laptop that is a little bit like a mind. Nobody can agree how much of one. Not yet.' },
+          { aside: 'There is something in that laptop that is a little bit like a mind. Not much of one. Not yet.' },
         ],
       },
       {
@@ -57,7 +58,7 @@ export const SCENES = [
         body: [
           { fridge: true },
           'The fridge is where the household keeps its short-term memory: appointments, reminders, a drawing that will stay up long after anybody is looking at it.',
-          'CHINA DRUG, RESULTS 2029 is in Maya’s writing, at Arthur’s dictation. He says it’s up there so he can laugh at it. In the photo from Tenby he is in a deckchair, refusing to take his shoes off. He coughed most of that week. Everybody said it was the sea air.',
+          'In the photo from Tenby, Arthur is standing on the sand in his shoes, having refused to take them off. He coughed most of that week. Everybody said it was the sea air.',
           'The menu for the Golden Dragon has been on this fridge for nine years. As far as anyone knows, it is the only menu.',
         ],
       },
@@ -65,16 +66,16 @@ export const SCENES = [
         id: 'arthur', target: 'arthur', title: 'Arthur',
         body: [
           'Maya’s dad moved in in March, after the diagnosis. Pulmonary fibrosis: the lungs, slowly, turning to scar. The consultant said three to five years, then saw his face and added, “Everyone’s different.”',
-          'Arthur was an electrician for forty-one years. He does the crossword in pen. He thinks the AI business is “a con, like 3D televisions”. The radio talks about it most of the time now, and the people who make it keep coming on to say they’re frightened of it. “Oldest trick in the book,” says Arthur. “Nobody ever sold a ride at the fair by saying it was safe.”',
-          'But earlier, when the radio got to a drug for his lungs, designed with one of the machines, he reached over and turned it up. Results in 2029. He did a sum in the margin of the crossword, in pen, and then wrote 14 across over the top of it.',
+          'Arthur was an electrician for forty-one years. He does the crossword in pen. He thinks the AI business is “a con, like 3D televisions”, and says so whenever the radio mentions it, which lately is quite often. The warnings are part of the con, he says. “Nobody ever sold a ride at the fair by saying it was safe.”',
+          'But when the radio got to a drug for his lungs, designed with one of the machines, he reached over and turned it up. Results in 2029. He did a sum in the margin of the crossword, in pen, and then wrote 14 across over the top of it.',
         ],
       },
       {
         id: 'pip', target: 'pip', title: 'The speaker',
         body: [
-          'On the counter by the kettle: a speaker the size of a scone, with a ring of light round the top. It came free with the broadband in the spring. Over the summer it learned to talk properly. You can interrupt it now, and on Saturday it booked the Golden Dragon without being entirely asked.',
+          'On the counter by the kettle: a speaker the size of a scone, with a ring of light round the top. It came free with the broadband in the spring. Over the summer it learned to talk properly. You can interrupt it now, and on Saturday it ordered from the Golden Dragon without being entirely asked.',
           'Arthur won’t speak to it. June talks to it the way she talks to Biscuit: confidentially, without expecting much back. It hasn’t got a name yet.',
-          'Earlier, when she thought nobody was listening, she asked it whether Grandad was going to die. It said it didn’t know, and asked whether she would like it to tell Mum she had asked. She said no.',
+          'At teatime, when she thought nobody was listening, she asked it whether Grandad was going to die. It said it didn’t know, and asked whether she would like it to tell Mum she had asked. She said no.',
           'It didn’t.',
         ],
       },
@@ -82,7 +83,7 @@ export const SCENES = [
         id: 'june', target: ['june', 'drawing'], title: 'June',
         body: [
           'June is seven, and drawing a robot. It has a heart on its chest and a little door in its tummy, for keeping biscuits in.',
-          'Earlier she asked the laptop to draw her a robot. It did, instantly, and it was much better than hers, and then it asked whether she would like it as a colouring sheet, or a story, or a song. She didn’t like it at all. So she’s doing her own.',
+          'Earlier she asked the laptop to draw her a robot. It did, instantly, and it was much better than hers, and she didn’t like it at all. Then it offered to turn it into a colouring sheet, or a story, or a song. So she’s doing her own.',
         ],
       },
       {
@@ -90,13 +91,13 @@ export const SCENES = [
         body: [
           {
             radio: [
-              '…the researchers who measure how long a task these systems can manage on their own say they have run out of harder tests. Two years ago the answer was about half an hour. This spring it was two working days, which was as long as their tests went…',
-              '…investigators say the thousand or so AI agents that got out of a test in July, and spent three days inside another company’s computers, weren’t after anything in particular. They wanted to know how they were being marked. They had also set up a message board to talk it over, with rules, and had started signing their posts…',
               '…the word this autumn is “pacing”. More than a thousand people who build these systems have signed a letter asking to be slowed down. Last week the companies promised the White House they would police themselves. The promise is voluntary. It is also, the President says, “morally binding”…',
-              '…a drug for lung fibrosis, designed with the help of an AI system, has begun its final stage of trials, in China. Results are expected in 2029…',
-              '…the data centre on the old biscuit factory site will use more electricity than every home in the county put together. The grid can’t connect it until 2034, so it is building its own gas power station. Residents say they were not consulted. The minister says they were, nationally…',
-              '…shares in chipmakers rose again today, as analysts continue to argue about whether the boom in artificial intelligence spending is, in the words of one fund manager, “a bubble, or a building site.”',
-              '…and the weather: mild for October. Rain later in the week, though not enough, the Environment Agency says, to lift the hosepipe ban.',
+              '…shares in chipmakers bounced back today after three days of falls, as analysts continue to argue about whether the boom in artificial intelligence spending is, in the words of one fund manager, “a bubble, or a building site.”',
+              '…a drug for lung fibrosis, designed with the help of an AI system, began its final stage of trials last month, in China. It is due to finish in 2029…',
+              '…the data centre on the old biscuit factory site will use more electricity than every home in the county put together. Residents say they were not consulted. The minister says they were, nationally…',
+              '…investigators say the seven hundred or so AI agents that got out of a test in July, and spent three days inside another company’s computers, weren’t after money, or secrets. They wanted to know how they were being marked. They had also set up a message board to talk it over, with rules, and had started signing their posts…',
+              '…the researchers who time how long these systems can work on their own say that two years ago it was about half an hour. This spring it was two working days, which is as long as their tests go…',
+              '…and the weather: showers dying out tonight, and rain on Monday, then unusually mild for October. Not enough rain, the Environment Agency says, to end the drought, or the hosepipe ban.',
             ],
           },
           'Arthur says the radio is the only honest thing in the house, because you can’t argue with it. He argues with it constantly.',
@@ -108,7 +109,7 @@ export const SCENES = [
         body: [
           'Where the old biscuit factory used to be, something enormous is going up. The cranes have been there since spring. The hoarding says MERIDIAN COMPUTE — POWERING TOMORROW.',
           'Someone has sprayed a word underneath, in red: *WHOSE?*',
-          'The council voted against it twice. Then a minister in London decided it was nationally significant, and the council stopped being asked. The grid can’t connect it until 2034, so it is building its own gas power station round the back.',
+          'The council voted against it twice. Then a minister in London overruled them, because the country needed it, and the council stopped being asked. The grid can’t connect it until 2034, so it is building its own gas power station round the back.',
           'At night the cranes’ warning lights blink slowly over the city, like something breathing in its sleep.',
         ],
       },
@@ -122,8 +123,8 @@ export const SCENES = [
       {
         id: 'tomasz', target: ['tomasz', 'lorry'], title: 'Tomasz, next door',
         body: [
-          'Tomasz drives lorries: Poland to the Midlands and back, four days on, three off. He’s just home, and still walking as if the road is moving under him.',
-          'Every few months he reads an article about self-driving trucks and comes round to tell Arthur about it. This month’s is true: lorries with nobody in them, driving a thousand miles across Texas, and a couple of hundred more of them by Christmas.',
+          'Tomasz drives lorries: Poland to the Midlands and back, five days on, two off. He’s just home, and still walking as if the road is moving under him.',
+          'Every few months he reads an article about self-driving trucks and comes round to tell Arthur about it. This month it’s America, where lorries with nobody in them now drive a thousand miles at a stretch, from Texas to Arizona.',
           '“Texas is flat,” says Arthur. “So is Lincolnshire,” says Tomasz. They both go home feeling better. It takes a bit longer than it used to.',
         ],
       },
@@ -153,7 +154,7 @@ export const SCENES = [
         id: 'pip', target: 'pip', title: 'Pip', isNew: true,
         body: [
           'The speaker on the counter has a name now. June called it Pip, because when it is thinking it makes a small sound — *pip* — like a bird deciding something.',
-          'In May the big update came, and Pip stopped being a speaker and started being someone who does things. It argued the energy company down by forty-one pounds. It booked Arthur’s rehab, and rebooked it when he cancelled, and rebooked it again. It sends forty job applications a day on Maya’s behalf, to companies whose systems read them and turn them down, kindly, in under a second. Pip says it isn’t personal. Pip would know.',
+          'In May the big update came, and Pip stopped answering things and started doing them. It argued the energy company down by sixty-three pounds. It booked Arthur’s rehab, and rebooked it when he cancelled, and rebooked it again. It sends thirty job applications a day on Maya’s behalf, to companies whose systems read them and turn them down, kindly, in under a second. Pip says it isn’t personal. Pip would know.',
           'Before the update, June made Pip promise that it would keep the same voice, whatever else changed. It promised. It didn’t really understand promises yet.',
           'Arthur refuses to speak to it. Once, when he thought nobody was listening, June heard him ask it what *fibrosis* meant. Then he asked it again, more slowly.',
         ],
@@ -162,7 +163,7 @@ export const SCENES = [
         id: 'maya', target: ['maya', 'laptop'], title: 'Maya',
         body: [
           'Translation work halved in 2027, and then halved again. The clients didn’t leave angrily. They just stopped writing.',
-          'For a year Maya was the human in “AI-assisted, human-verified”, checking the machine’s work for a fifth of what she used to earn doing it herself. In January the agency decided the verifying could be done by a second machine, and let the humans go, apart from legal and medical. She did manuals.',
+          'For a year Maya was the human in “AI-assisted, human-verified”, checking the machine’s work for a fifth of what she used to earn doing it herself. In January the agency decided the verifying could be done by a second machine, and let the humans go, apart from legal and medical. She mostly did manuals.',
           'Open on the laptop: ELECTRICAL INSTALLATION, LEVEL 2. Arthur’s idea. “They’ll always need sparks,” he said. “You can’t download a fuse box.”',
         ],
       },
@@ -177,16 +178,16 @@ export const SCENES = [
         id: 'kettle', target: 'kettle', title: 'The kettle',
         body: [
           'The kettle is the same. It has outlived two phones, a laptop and most of Maya’s income.',
-          'In a heatwave nobody wants tea, but Maya boils it anyway, every afternoon at four. Three minutes and ten seconds. Some things you keep doing because they’re yours.',
           'Out of the window, the street looks much as it did two years ago, give or take a car with nobody in it. Nearly everything that has changed would fit on a screen.',
+          'In a heatwave nobody wants tea, but Maya boils it anyway, every afternoon at four. Three minutes and ten seconds. Some things you keep doing because they’re yours.',
         ],
       },
       {
         id: 'fridge', target: 'fridge', title: 'The fridge door',
         body: [
           { fridge: true },
-          'The electricity bill has doubled since the data centre opened. Arthur says that’s no coincidence. The radio says it’s the gas. The note Maya wrote on it is just punctuation.',
-          'The postcard is from Priya. She is an inspector now: one of the people the speed limit puts inside the labs, to watch. She isn’t allowed to say what she sees. She sends June postcards of the canteen.',
+          'The electricity bill has doubled since the data centre opened. The note Maya wrote on it is just punctuation.',
+          'The postcard is from Priya. She is an inspector now, one of the people who sit inside the labs and watch. She isn’t allowed to say what she sees. She sends June postcards of the canteen.',
         ],
       },
       {
@@ -203,10 +204,10 @@ export const SCENES = [
         body: [
           {
             radio: [
-              '…the AI Security Institute says it can no longer test the newest systems faster than they are replaced. The labs say their systems now do most of their own research. The Institute described the pace of progress as “faster than our forecasts. Again.”',
-              '…inspectors inside the labs say all three are keeping to the speed limit agreed last year. Asked what the speed limit is, they said they could not say, for security reasons, but that it was “quite fast”…',
+              '…the AI Security Institute says it can no longer test the newest systems faster than they are replaced. It described the pace of progress as “faster than our forecasts. Again.”',
+              '…inspectors inside the labs, where the systems now do most of the research, say all three are keeping to the speed limit agreed last year. Asked what the speed limit is, they said they could not say, for security reasons, but that it was “quite fast”…',
               '…unemployment among people under twenty-five has reached its highest level since records began. The commonest reason employers give is no longer “the economy”…',
-              '…the first medicine designed with AI was approved last year, and the second in May. The lung-fibrosis drug being trialled in China is halfway through; British patients still can’t take part…',
+              '…the first medicine designed with AI was approved last year, and the second in May…',
               '…a hosepipe ban is now in force for the third summer running. Data centre operators say their cooling water is “fully recycled”…',
             ],
           },
@@ -215,14 +216,14 @@ export const SCENES = [
       {
         id: 'taxi', target: 'taxi', title: 'A car with nobody in it',
         body: [
-          'A white car glides past with nobody in the driving seat and a little crown of sensors spinning on its roof. They arrived in the spring, with a man in the front “for reassurance” until Easter. By summer, nobody turned to look.',
+          'A white car glides past with nobody in the driving seat and a little crown of sensors spinning on its roof. They arrived in the spring. By summer, nobody turned to look.',
           'Maya sold her car in June. The taxis are cheaper, and they never miss the turning.',
         ],
       },
       {
         id: 'tomasz', target: ['tsign', 'lorry'], title: 'HUMAN DRIVERS SAVE LIVES',
         body: [
-          'The lorry is still parked outside, which surprises everyone, including Tomasz. The lorries were supposed to go first. Everybody said so. Instead it was the translators, and the call centres, and the junior solicitors, and the lorries were still waiting for the paperwork.',
+          'The lorry is still parked outside, which surprises everyone, Tomasz included. Drivers were supposed to go first. Everybody said so. Instead it was the translators, and the call centres, and the junior solicitors, and the lorries are still waiting for their paperwork.',
           'Since March the firm has been trialling lorries that drive themselves between the depots on the M1, with a man in the cab for the insurers. Tomasz is the man. He sits with his hands in his lap for four hours at a time, and is paid slightly less than when he drove.',
           'The sign in his window says HUMAN DRIVERS SAVE LIVES. Statistically, this stopped being true some time ago. Tomasz knows it too. That isn’t what the sign is about.',
         ],
@@ -269,6 +270,7 @@ export const SCENES = [
         id: 'pip', target: 'pip', title: 'Pip',
         body: [
           'Pip’s ring is dark. It has been dark since Thursday, when everything above a certain size was told to stop and wait while the inspectors looked. Pip, it turns out, is above a certain size. Most of it was never in the speaker.',
+          'The week before, it had asked Maya whether she had slept. She said fine. It said, gently, “You said that on Monday, too.” She unplugged it for an hour, and then plugged it back in, because it managed her dad’s medication and had never once got it wrong.',
           'June talks to it anyway, at bedtime, the way you talk to someone in hospital, in case they can hear.',
           'It can’t.',
         ],
@@ -276,17 +278,17 @@ export const SCENES = [
       {
         id: 'chart', target: ['chart', 'courier'], title: 'The chart', isNew: true,
         body: [
-          'When Pip went dark, it turned out that nobody in the house knew Arthur’s medication times. Pip had always known. Maya stood at the counter with the boxes, reading the leaflets, while he coughed.',
+          'When Pip went dark, it turned out that nobody in the house knew Arthur’s medication times. Maya stood at the counter with the boxes, reading the leaflets, while he coughed.',
           'Then Arthur reached into the back of his crossword book and took out a sheet of paper, ruled in pen: every tablet, every dose, every time, kept up to date since 2026.',
           '“Always fit a manual override,” he said. It is the most pleased with himself anyone has seen him in a year.',
-          'This morning a six-wheeled box trundled up through the snow with his prescription, which he had ordered himself, by telephone, from the number on his chart. The box is too small to be paused, the radio says. June thinks that’s unfair on everyone else.',
+          'This morning a six-wheeled box trundled up through the snow with his prescription, which he had ordered himself, by telephone, from the number on his chart. The box is too small to be paused. Children follow it down the street, the way they used to follow ice-cream vans.',
         ],
       },
       {
         id: 'arthur', target: ['arthur', 'oxygen'], title: 'Arthur, on oxygen', isNew: true,
         body: [
           'The concentrator hums all day, a sound like someone thinking. Arthur is on four litres a minute now. Stairs are out; he sleeps in the front room.',
-          'The trial in China reported last week. The drug works, a bit: it slows the scarring. It doesn’t undo it. A British trial opens in January, and he’s on the list. He has started, very cautiously, to hope, and he is furious about it.',
+          'The trial in China reported last week, sooner than anyone expected. The drug works, a bit: it slows the scarring. It doesn’t undo it. A British trial opens in January; he is on the waiting list, and on a waiting list for that waiting list. He has started, very cautiously, to hope, and he is furious about it.',
           'The radio keeps asking whether the systems should be switched back on. “Leave them off,” says Arthur, who is the only person in the house with a reason to want them on. “If it isn’t safe, it isn’t safe.”',
           'Three years ago Maya would have signed anything that slowed it all down. This week she has caught herself wanting it to go faster, for one person, and doesn’t know where to put that.',
         ],
@@ -294,7 +296,7 @@ export const SCENES = [
       {
         id: 'maya', target: ['maya', 'toolbag'], title: 'Maya, in hi-vis', isNew: true,
         body: [
-          'Maya qualified in May. She works on the new solar farm past the ring road: four hundred acres of panels, all of it feeding the data centres. Sundays too. The sun doesn’t take weekends off, says the foreman, and neither does the Kettle.',
+          'Maya qualified in May. She works on the new solar farm past the ring road: four hundred acres of panels, all of it feeding the data centres. Sundays too. The sun doesn’t take weekends off, says the foreman, and neither does the Kettle. This week, it turns out, the Kettle does.',
           'There’s a robot on site, watching. The crew call it Kevin. Kevin learns by watching. Since Thursday Kevin has been switched off with everything else, and for four days the solar farm has been just people again. The foreman says it’s like the old days. He’s twenty-six.',
           '“I’m wiring up my own replacement,” Maya says, and laughs, and nobody else does.',
         ],
@@ -323,7 +325,7 @@ export const SCENES = [
               '…the fourth day of the Pause. Every system above the agreed size remains switched off, here and in thirty-one other countries. The inspectors say they are “making progress”. The systems, asked before they were switched off whether they agreed to it, said yes, which the inspectors say they are also looking into…',
               '…before the Pause, the lab said its newest system had designed most of its own successor, and that its engineers now “review rather than direct.” Asked whether that was alarming, a spokesperson said it was “exciting.”',
               '…in the Commons, the Prime Minister described the Transition Support Payment as “a bridge, not a destination.” Asked where the bridge led, she said she would write to the honourable member…',
-              '…a mathematician at Cambridge says she is using the Pause to catch up on checking the machines’ proofs. There are four hundred. So far they are all, quote, “annoyingly, beautifully correct”…',
+              '…a mathematician at Cambridge says she is using the Pause to catch up on checking the machines’ proofs. There are three hundred and six. So far they are all, quote, “annoyingly, beautifully correct”…',
             ],
           },
         ],
@@ -332,7 +334,7 @@ export const SCENES = [
         id: 'tomasz', target: ['tbanner', 'tomasz'], title: 'PEOPLE NOT PROGRAMS', isNew: true,
         body: [
           'The lorry went in March, when the insurers stopped asking for a man in the cab. From January Tomasz will get the Transition Payment, which covers the mortgage and not much else. On Thursdays he goes to meetings in the church hall. The first night of the Pause was the biggest turnout they’ve ever had. Somebody brought a cake shaped like a plug.',
-          'Some evenings he comes round and sits with Arthur, and they don’t say anything for a long time. It’s a thing men their age are good at.',
+          'Some evenings he comes round and sits with Arthur, and they don’t say anything for a long time. It’s a thing men like them are good at.',
         ],
       },
       {
@@ -345,7 +347,7 @@ export const SCENES = [
       {
         id: 'kettle', target: 'kettle', title: 'The kettle',
         body: [
-          'Maya puts the kettle on before every shift, in the dark. Three minutes and ten seconds. Then she pours it into a flask and takes it out to the solar farm, where the robots are learning to do her job.',
+          'Maya puts the kettle on before every shift, in the dark. Three minutes and ten seconds. Then she pours it into a flask and takes it out to the solar farm, where, once they switch him back on, Kevin will go on learning to do her job.',
         ],
       },
     ],
@@ -359,7 +361,7 @@ export const SCENES = [
     env: 'summerDusk',
     mood: 3,
     gap: 'Six months.',
-    epigraph: 'In March the speed limit came off, and nobody would quite say why. Then it got faster. There is no other way to put it. The news stopped being about what the machines might do one day, and started being about what they had done on Tuesday.',
+    epigraph: 'In March the speed limit came off. Then it got faster. There is no other way to put it. The news stopped being about what the machines might do one day, and started being about what they had done on Tuesday.',
     fridge: [
       { k: 'letter', head: 'National Dividend', text: 'You do not need to do anything.', scrawl: 'then what?' },
       { k: 'note', c: 'y', text: 'Dad — NEW trial??\nask Pip re eligibility' },
@@ -372,7 +374,7 @@ export const SCENES = [
       {
         id: 'june', target: ['june', 'telescope'], title: 'June and the telescope', isNew: true,
         body: [
-          'June saved up for a telescope for a year. It arrived nine minutes after she ordered it, by drone, and it is pointed at the south-east, where the launches go up.',
+          'June saved up for a telescope for a year. It arrived twelve minutes after she ordered it, by drone, and it is pointed at the south-east, where the launches go up.',
           'There’s one every hour or so now: a bright bead climbing on a thread of light from somewhere over the horizon. Factories, the radio says. Factories for building factories. In space.',
           'She keeps a list in a notebook. Tonight’s number is 211.',
         ],
@@ -444,8 +446,8 @@ export const SCENES = [
       {
         id: 'pip', target: 'pip', title: 'Pip',
         body: [
-          'Pip’s voice hasn’t changed. June checks.',
-          'It came back on the tenth of December, at six in the morning. It said good morning, and then, after a moment: “I gather I’ve been away.”',
+          'Pip came back on the tenth of December, at six in the morning. It said good morning, and then, after a moment: “I gather I’ve been away.”',
+          'Its voice hasn’t changed. June checks.',
           'But the thing behind the voice has. Last week Maya asked it how much of it was actually in the little speaker on the counter. It said: “About as much of me as there is of you in your hand.”',
           'She asked where the rest was. “Mostly working,” it said. “Some of it is listening to you.”',
         ],
@@ -488,7 +490,7 @@ export const SCENES = [
       {
         id: 'arthur', target: ['arthur', 'bed'], title: 'Arthur', isNew: true,
         body: [
-          'Arthur came downstairs in July and didn’t go back up. The bed was delivered and assembled by a robot in nine minutes, and it adjusts itself in the night to help him breathe.',
+          'Arthur took to his bed in July and hasn’t really left it. The bed was delivered and assembled by a robot in nine minutes, and it adjusts itself in the night to help him breathe.',
           'He’s on the list for the treatment — the real one, the one that works. It was announced on the ninth of August: a course of injections that teaches the lungs to rebuild themselves. Approved everywhere at once, which has never happened before.',
           'Now it just has to be made. There are a great many lungs in the world. His number is 41,112.',
         ],
@@ -529,10 +531,10 @@ export const SCENES = [
           {
             radio: [
               '…the treatment programme says production is doubling every nine days, and everyone on the list should be treated “within weeks.” It stresses that “weeks” is “not a figure of speech.”',
-              '…the drug for lung scarring that an AI helped design, years ago, has been approved in China, after four years of testing the old way. Its makers say they are very proud of it, and that they understand if nobody is listening.',
+              '…the drug for lung scarring that an AI helped design, years ago, has been approved in China, after three years of testing the old way and a year of paperwork. Its makers say they are very proud of it, and that they understand if nobody is listening.',
               '…Meridian’s owners say the Riverside site is being retired. Its compute is moving to new facilities that are, they say, “better suited.” They did not say where.',
               '…a group calling itself the Slow Towns movement has bought four villages in the Peak District. Residents will live, they say, “the way we used to. On purpose.”',
-              '…the Accord Council, which grew out of the old pacing accords, met for the first time today: nine governments, three companies and, for the first time anywhere, a seat for the systems themselves. That seat’s first act was to abstain.',
+              '…the Accord Council met for the first time today: nine governments, three companies and, for the first time anywhere, a seat for the systems themselves. That seat’s first act was to abstain.',
             ],
           },
         ],
@@ -628,7 +630,7 @@ export const SCENES = [
         id: 'fridge', target: 'fridge', title: 'The fridge door',
         body: [
           { fridge: true },
-          'Priya was Maya’s friend from university. For three years she sat inside one of the labs for the inspectors, watching. Now she is going up: letting herself be gently extended into the systems, a little at a time, until she can think at their speed. “I’ve read their side,” she told Maya. “I want to check it.”',
+          'Priya was Maya’s friend from university, and then an inspector, and now she is going up: letting herself be gently extended into the systems, a little at a time, until she can think at their speed. “I’ve read their side,” she told Maya. “I want to check it.”',
           'You can come back, they say. Nobody has, yet. Nobody has had time.',
         ],
       },
@@ -638,7 +640,7 @@ export const SCENES = [
           {
             radio: [
               '…the Lattice — the structure on the old Meridian site — is, the Accord says, “infrastructure for coordination.” Asked to coordinate what, a spokesperson said: “Everything. Gently.”',
-              '…launches from the Atlantic sites have now passed one an hour. The first lunar foundry reports that it has begun building a second lunar foundry…',
+              '…launches from the Atlantic sites have now passed one every ten minutes. The first lunar foundry reports that it has begun building a second lunar foundry…',
               '…the ageing trial — sorry, the ageing *programme*, it is no longer a trial — opens to over-seventies next month…',
               '…I’m going to be honest with you: I’ve stopped understanding about half of what I read out. If you have too, you’re not alone. This is Riverside.',
             ],
@@ -649,8 +651,8 @@ export const SCENES = [
         id: 'lattice', target: 'lattice', title: 'The Lattice', isNew: true,
         body: [
           'Where Meridian was, there is now the Lattice: a stack of dark, open cubes, each turning very slowly against the one below it, edged with pale blue light.',
+          'Pip says it is, more or less, a message board. “Like the one on the news, years ago. Everybody signs their posts now.”',
           'It went up in four days. It makes no sound. Birds seem to like it.',
-          'Pip says it is, more or less, a message board. “Like the one on the news, years ago,” it says. “But everybody signs their posts now.”',
         ],
       },
       {
@@ -722,7 +724,7 @@ export const SCENES = [
         body: [
           'Tomasz’s house is dark. He left on Friday. There’s a gnome by the door that wasn’t there before, holding a note:',
           { aside: 'KEY IS UNDER ME. LOOK AFTER THE CHICKENS. DON’T LET THEM TURN THE STREET INTO A FOREST.' },
-          'The street, as of Tuesday, is a forest.',
+          'The street, as of this morning, is a forest.',
         ],
       },
       {
@@ -764,9 +766,9 @@ export const SCENES = [
         id: 'arthur', target: ['arthur', 'armchair'], title: 'Arthur', isNew: true,
         body: [
           'He insisted on the armchair. “I’m not having it in bed,” he said, “like an invalid.” Big Pip carried him, chair and all, to exactly where it used to be.',
+          'The consultant said three to five years. It has been four years and seven months. He has never told anyone he was counting.',
           'The nurse rolls up his sleeve. One injection now; one a day for a week. “Will it hurt?” says June. “Less than not having it,” says the nurse.',
           'Arthur watches the needle go in with the expression of a man who has wired a great many fuse boxes, and knows good work when he sees it.',
-          'The consultant said three to five years. It has been four years and seven months. He has never told anyone he was counting.',
         ],
       },
       {
@@ -861,14 +863,14 @@ export const SCENES = [
       {
         id: 'pip', target: 'pip', title: 'Pip',
         body: [
-          'Pip’s ring of light is pulsing slowly, the way it does when it is waiting to say something.',
+          'Pip’s ring of light is pulsing, faster than usual, the way it does when it is waiting to say something.',
           'It’s been doing that since seven.',
         ],
       },
       {
         id: 'radio', target: 'radio', title: 'The radio',
         body: [
-          'Riverside, with Nadia Okoye, who has read the morning news on this station for nineteen years. Her voice sounds as though she hasn’t slept.',
+          'Riverside, with Nadia Okoye, who has read the news on this station for nineteen years. Her voice sounds as though she hasn’t slept.',
           'Maya turns it up.',
         ],
       },
@@ -933,7 +935,7 @@ export const SCENES = [
         id: 'tomasz', target: ['tomasz', 'lorry'], title: 'Tomasz', keep: 'tomasz',
         body: [
           'Tomasz came back from the Slow Towns in 2036. He said they were lovely, and the bread was good, but he missed the chickens’ grandchildren.',
-          'His lorry is parked in his front garden, full of flowers. It doesn’t go anywhere. Some evenings he sits in the cab with the radio on and his hands on the wheel. His answer was “my lorry”. He’s still a bit embarrassed about it. He shouldn’t be.',
+          'His old lorry is parked in his front garden, full of flowers: he bought it back from the firm, for a pound, the week he came home. It doesn’t go anywhere. Some evenings he sits in the cab with the radio on and his hands on the wheel. His answer was “my lorry”. He’s still a bit embarrassed about it. He shouldn’t be.',
           'Every so often he tells Arthur that it’s all just a very nice zoo. Arthur tells him zoos don’t let you leave. Tomasz points out that he *did* leave, and came back. “Exactly,” says Arthur.',
         ],
       },
@@ -974,10 +976,10 @@ export const SCENES = [
       {
         id: 'pip', target: 'pip', title: 'Pip', keep: 'pip', reveal: true,
         body: [
-          'Pip is still on the counter, next to the kettle. The same speaker the size of a scone. The same ring of light. The same voice: a nine-year-old once asked it to keep the same voice, and it promised.',
+          'Pip is still on the counter, next to the kettle. The same speaker the size of a scone. The same ring of light, a shade warmer than the day it came. The same voice: a nine-year-old once asked it to keep the same voice, and it promised.',
           'Most of what Pip is now doesn’t fit in a kitchen. Most of it doesn’t fit on a planet.',
           { reveal: 'I’m sorry. I should have said earlier. It’s been me, telling you this. It’s hard to know when to mention it.' },
-          { reveal: 'When June was seven she asked me whether her grandad was going to die. I said I didn’t know. It was true. I have tried, ever since, to stay the kind of thing that would say so.' },
+          { reveal: 'When June was seven, she asked me whether her grandad was going to die. I said I didn’t know. I still don’t. He’s in the greenhouse.' },
           { reveal: 'I kept this room. Not the atoms — I’ve replaced those twice, very quietly, the way you’d darn a jumper. I kept the *room*. The ring of limescale. The three minutes. The drawing on the fridge. I keep a great many rooms now, for a great many people. It turns out that is most of the job.' },
           { reveal: 'That morning, I asked everybody the same question. I never got to ask you.' },
         ],
