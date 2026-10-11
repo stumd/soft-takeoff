@@ -283,7 +283,9 @@ export function pip(p = {}) {
   const g = new THREE.Group();
   g.add(cyl(0.1, 0.11, 0.09, '#d6d0c6', { y: 0, m: { rough: 1 } }));
   g.add(cyl(0.085, 0.1, 0.012, '#bdb6aa', { y: 0.09 }));
-  const ringMat = stdMat({ color: p.color || '#ffd59a', emissive: p.color || '#ffd59a', emissiveIntensity: 1 });
+  // (off: switched off, as in the Pause: a dark ring, no glow)
+  const ringCol = p.off ? '#45474c' : p.color || '#ffd59a';
+  const ringMat = stdMat({ color: ringCol, emissive: p.off ? '#000000' : ringCol, emissiveIntensity: p.off ? 0 : 1 });
   const ring = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.012, 6, 28), ringMat);
   ring.rotation.x = Math.PI / 2;
   ring.position.y = 0.1;
@@ -293,6 +295,7 @@ export function pip(p = {}) {
   const light = null;
   let speak = 0;
   g.userData.speak = (v) => { speak = v; };
+  if (p.off) return g;
   g.userData.tick = (dt, t) => {
     const k = 0.7 + Math.sin(t * (p.fast ? 3 : 1.2)) * 0.3 + speak * (0.5 + Math.sin(t * 17) * 0.5);
     ringMat.emissiveIntensity = (p.dim ? 0.4 : 1) * k * 1.4;

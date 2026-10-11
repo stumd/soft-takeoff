@@ -56,6 +56,8 @@ STATES[0] = (fr) => [
   ...wall({ key: 'oct26', month: 'OCTOBER', color: '#3f6a8a', motif: 'lighthouse' }, '19:40'),
   fr,
   kettle(),
+  // the speaker, before it had a name: a cooler ring than Pip's
+  pip({ color: '#d8e2ea' }),
   radio(),
   E('dogBed', 'dogBed', { bowl: true, ball: true }, [-5.2, 0, -0.45]),
   E('biscuit', 'dog', {}, [-5.2, 0.08, -0.45], 0.5),
@@ -111,7 +113,8 @@ STATES[1] = (fr) => [
   E('lamps', 'lampPosts', {}),
   E('taxi', 'robotaxi', { speed: 3.4, pause: 5 }),
   E('drone', 'drone', { r: 8, h: 6, speed: 0.22 }),
-  E('van', 'van', { color: '#f0f0ee' }, [12.4, 0.05, 5.6]),
+  // still parked outside: the lorries didn't go first
+  E('lorry', 'lorry', {}, [12.5, 0.05, 5.6]),
   E('thouse', 'tomaszHouse', { seed: 1 }),
   E('tsign', 'tomaszSign'),
   E('city', 'city', { variant: 'old' }),
@@ -130,10 +133,13 @@ STATES[2] = (fr) => [
   ...wall({ key: 'dec29', month: 'DECEMBER', color: '#5a7a9a', motif: 'tree' }, '09:15'),
   fr,
   kettle(),
-  pip(),
+  // dark since Thursday: the Pause
+  pip({ off: true }),
   radio(),
   E('dogBed', 'dogBed', { bowl: true }, [-5.2, 0, -0.45]),
   E('oxygen', 'oxygen', {}, [-7.4, 0, -0.25]),
+  // Arthur's medication chart, ruled in pen
+  E('chart', 'paper', { color: '#fbfaf5', w: 0.26, h: 0.34 }, [-3.55, 0.78, -2.4]),
   E('toolbag', 'toolbag', { hivis: false }, [-7.3, 0, -3.3]),
   E('tablet', 'tablet', { screen: '#9fd0f0', stand: true }, [-4.1, 0.78, -2.95]),
   E('mug1', 'mug', { full: true, color: '#3f6b4a' }, [-5.6, 0.905, -5.55]),
