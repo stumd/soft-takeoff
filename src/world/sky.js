@@ -1,4 +1,5 @@
 import { THREE, mat, drawnTexture } from './kit.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { G, skyUniforms } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
@@ -32,6 +33,23 @@ const _w = new THREE.Vector3();
 function skyX(sky, sx, z) {
   if (!sky) return null;
   return sky.worldToLocal(_w.set(xAt(sx, z), 0, z)).x;
+}
+// The Spindle's thread (city.js SPINDLE), which runs up through the sky:
+// launches and the morning's flare keep off it.
+const spindleX = (sky) => skyX(sky, 11.2, -48.5);
+
+// The date card (top left), in CSS pixels, re-read twice a second; all zeros
+// while it is hidden. Lights in the sky keep out from under it, and the
+// moon's marker keeps clear of it.
+const _card = { l: 0, t: 0, r: 0, b: 0, at: -9 };
+function cardRect() {
+  if (Math.abs(G.time - _card.at) < 0.5 || typeof document === 'undefined') return _card;
+  _card.at = G.time;
+  const el = document.getElementById('hud');
+  const r = el && !el.classList.contains('hidden') ? el.getBoundingClientRect() : null;
+  if (r && r.width > 0 && r.height > 0) Object.assign(_card, { l: r.left, t: r.top, r: r.right, b: r.bottom });
+  else Object.assign(_card, { l: 0, t: 0, r: 0, b: 0 });
+  return _card;
 }
 
 // The local z, in the sky layer, that puts a point at (x, y) of the layer at
@@ -76,16 +94,34 @@ export function moonSpot(p = {}, sky = null) {
   return [fitX(mix(gap, tallX, t), 2.5), Math.min(mix(11.55, 8.4, t), belowTop(44))];
 }
 
-// The moon's marker, in the moon's own units: above it when there is room
-// under the top edge and clear of the date card (top left), otherwise beside
-// it, on the right.
+// The night moon's radius, in sky units, and its size: bigger on landscape
+// phones, whose moon would otherwise be too small to show its lights.
+const MOON_R = 1.1;
+const moonScale = () => 1 + 0.45 * shortness();
+
+// The moon's marker, in the moon's own units: its disc's radius and 16px
+// more from its centre (its dot is 11px across), above it when that is
+// clear of the top edge and the date card, otherwise beside it, on the right.
+// On landscape phones, whose moon sits in a narrow gap between spires just
+// under the top edge, it goes up and to the right instead, as high as the
+// top edge allows: beside it would put it on a spire.
 export function moonMarker() {
   const ppu = pxPerUnit();
   const w = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const off = MOON_R * moonScale() + 16 / ppu;
   const mx = w / 2 + skyState.moonX * ppu;
-  const my = (13.5 - skyState.moonY - 1.5) * ppu;
-  const clearOfCard = mx - 16 > 240 || my - 16 > 95;
-  return my >= 22 && clearOfCard ? [0, 1.5, 0] : [1.75, 0.5, 0];
+  const myc = (13.5 - skyState.moonY) * ppu;
+  const my = myc - off * ppu;
+  const c = cardRect();
+  const clearOfCard = mx - 16 > c.r + 4 || my - 16 > c.b + 4;
+  if (my >= 22 && clearOfCard) return [0, off, 0];
+  // (16px: markers that would sit higher come down to there; game.js)
+  const dy = (myc - 16) / ppu;
+  if (shortness() > 0.2 && dy > 0.5 * off && dy < off) {
+    const dx = Math.sqrt(off * off - dy * dy);
+    if (mx + dx * ppu - 16 > c.r + 4) return [dx, dy, 0];
+  }
+  return [off, 0.25, 0];
 }
 
 // The band of sky the swarm's lines cross: high in the strip above the city
@@ -149,30 +185,51 @@ export function stars(p = {}) {
 
 export function moon(p = {}) {
   const g = new THREE.Group();
+  // (its parts sit in `body`, which the night moon scales for short screens:
+  // the group's own scale is the world's to grow and shrink it)
+  const body = new THREE.Group();
+  g.add(body);
   const m = new THREE.MeshBasicMaterial({ color: '#f2efe2', fog: false });
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(1.1, 36), m);
-  g.add(disc);
-  const shade = new THREE.Mesh(new THREE.CircleGeometry(1.1, 36), new THREE.MeshBasicMaterial({ color: '#0c1630', fog: false, transparent: true, opacity: 0.85 }));
-  shade.position.set(0.55, 0.15, 0.01);
-  shade.scale.set(0.85, 0.95, 1);
-  if (p.phase !== 'full') g.add(shade);
+  const crescent = !p.day && p.phase !== 'full';
+  let disc;
+  if (crescent) {
+    // A crescent: the whole disc in earthshine, and the lit part a crescent
+    // on it, lit from the lower left (the dark side faces up and right).
+    // Nothing reaches past the disc's edge.
+    disc = new THREE.Mesh(new THREE.CircleGeometry(MOON_R, 36), new THREE.MeshBasicMaterial({ color: '#2e3750', fog: false }));
+    body.add(disc);
+    const TERM = 0.4; // the terminator's half-width: the crescent is R - TERM wide
+    const s = new THREE.Shape();
+    s.absarc(0, 0, MOON_R, Math.PI / 2, (3 * Math.PI) / 2, false);
+    s.absellipse(0, 0, TERM, MOON_R, (3 * Math.PI) / 2, Math.PI / 2, true);
+    const lit = new THREE.Mesh(new THREE.ShapeGeometry(s, 8), m);
+    const face = new THREE.Group();
+    face.rotation.z = 0.27;
+    face.position.z = 0.01;
+    face.add(lit);
+    body.add(face);
+    if (p.lights) {
+      // Lights on the dark side of the moon: someone's factory. One mesh.
+      const r = rng(12);
+      const dots = [];
+      for (let tries = 0; tries < 120 && dots.length < 16; tries++) {
+        const a = r() * Math.PI * 2, rad = Math.sqrt(r()) * MOON_R;
+        const x = Math.cos(a) * rad, y = Math.sin(a) * rad;
+        const size = 0.045 + r() * 0.03;
+        if (Math.hypot(x, y) > MOON_R - 0.08 - size) continue;
+        if (x < -TERM * Math.sqrt(Math.max(0, 1 - (y / MOON_R) ** 2)) + 0.1 + size) continue;
+        dots.push(new THREE.CircleGeometry(size, 5).translate(x, y, 0.01));
+      }
+      if (dots.length) face.add(new THREE.Mesh(mergeGeometries(dots, false), new THREE.MeshBasicMaterial({ color: '#ffd28a', fog: false })));
+    }
+  } else {
+    disc = new THREE.Mesh(new THREE.CircleGeometry(MOON_R, 36), m);
+    body.add(disc);
+  }
   const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: dotTex(), color: '#9ab4ff', transparent: true, opacity: 0.35, depthWrite: false, fog: false }));
   halo.scale.set(6, 6, 1);
   halo.position.z = -0.1;
-  g.add(halo);
-  if (p.lights) {
-    // Lights on the dark side of the moon: someone's factory.
-    const r = rng(12);
-    const lm = new THREE.MeshBasicMaterial({ color: '#ffd28a', fog: false });
-    for (let i = 0; i < 16; i++) {
-      const a = r() * Math.PI * 2, rad = Math.sqrt(r()) * 0.9;
-      const x = Math.cos(a) * rad + 0.25, y = Math.sin(a) * rad;
-      if (Math.hypot(x, y) > 1.0) continue;
-      const d = new THREE.Mesh(new THREE.CircleGeometry(0.035 + r() * 0.03, 6), lm);
-      d.position.set(x, y, 0.02);
-      g.add(d);
-    }
-  }
+  body.add(halo);
   // Clear of the skyline: high in the band of sky on a landscape screen, a
   // little lower on tall ones, whose frame has more sky above the city.
   g.position.set(...moonSpot(p), 0);
@@ -184,6 +241,7 @@ export function moon(p = {}) {
     const [x, y] = moonSpot(p, sky);
     g.position.x = x;
     g.position.y = y;
+    if (!p.day && p.x == null) body.scale.setScalar(moonScale());
     // The night moon hangs in front of the far district and its land, so
     // that on small phones it is not hidden behind them, and behind
     // everything else. (its disc tilts by up to a world unit either way on
@@ -206,7 +264,6 @@ export function moon(p = {}) {
     m.transparent = true;
     m.opacity = 0.5;
     halo.material.opacity = 0;
-    shade.material.opacity = 0;
   }
   return g;
 }
@@ -298,6 +355,15 @@ export function swarm(p = {}) {
     const W = H + 1;
     // in front of the far district, like the moon, but just behind it
     const dm = depthMap(g.parent);
+    // The date card, in sky units, with a margin: lights there go out of
+    // view, so that the lines pass behind it rather than peeking out round
+    // its edges (a card within 40px of the screen's edge takes that strip
+    // with it).
+    const c = cardRect();
+    const ppu = pxPerUnit(), cx = (typeof window !== 'undefined' ? window.innerWidth : 1440) / 2;
+    const card = c.r > c.l;
+    const cl = c.l < 40 ? -1e9 : (c.l - 8 - cx) / ppu, cr = (c.r + 8 - cx) / ppu;
+    const ct = c.t < 40 ? 1e9 : 13.5 - (c.t - 8) / ppu, cb = 13.5 - (c.b + 8) / ppu;
     let i = 0;
     for (const tr of trains) {
       const P = 2 * W + tr.n * tr.gap + tr.rest;
@@ -307,7 +373,8 @@ export function swarm(p = {}) {
         const x = -W + u;
         const xn = x / H;
         const yb = tr.y + tr.slope * xn + tr.curve * (xn * xn - 0.4);
-        const y = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
+        let y = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
+        if (card && x > cl && x < cr && y < ct && y > cb) y = -100;
         pos[i * 3] = x;
         pos[i * 3 + 1] = y;
         pos[i * 3 + 2] = zAt(dm, x, y, SKY_FRONT - 1.2);
@@ -365,11 +432,24 @@ export function launches(p = {}) {
     if (next <= 0) {
       const L = pool[idx++ % pool.length];
       L.t = 0;
-      L.x = fitX(p.x != null ? p.x + (r() - 0.5) * 6 : 6 + r() * 18, 1.5);
-      // Never up across the moon. (Launches lean left as they climb, so
-      // one starting to its right needs more room.)
-      const dm = L.x - skyState.moonX;
-      if (G.time - skyState.moonAt < 0.5 && dm > -1.8 && dm < 4.6) L.x = fitX(skyState.moonX + (dm < 1.4 ? -1.8 : 4.6), 1.5);
+      const x0 = fitX(p.x != null ? p.x + (r() - 0.5) * 6 : 6 + r() * 18, 1.5);
+      // Never up the Spindle's thread, nor across the moon. (Launches lean
+      // left as they climb, so one starting to the right of either needs
+      // more room.) On a phone's narrow sky they would otherwise all stand
+      // at its right edge, which is where the Spindle is.
+      const spx = spindleX(g.parent);
+      const moonUp = G.time - skyState.moonAt < 0.5;
+      const mx = skyState.moonX;
+      const clear = (x) => (spx == null || x <= spx - 1 || x >= spx + 3.5) && (!moonUp || x <= mx - 1.8 || x >= mx + 4.6);
+      L.x = x0;
+      if (!clear(x0)) {
+        const alts = [spx != null && spx - 1, moonUp && mx - 1.8, moonUp && mx + 4.6, spx != null && spx + 3.5]
+          .filter((v) => v !== false)
+          .map((v) => fitX(v, 1.5))
+          .filter(clear)
+          .sort((a, b) => Math.abs(a - x0) - Math.abs(b - x0));
+        if (alts.length) L.x = alts[0];
+      }
       L.bend = 0.05 + r() * 0.12;
       L.item.position.set(L.x, p.y0 ?? -1, 0);
       next = every * (0.6 + r() * 0.8);
@@ -387,8 +467,10 @@ export function launches(p = {}) {
       }
       const hgt = Math.pow(k, 1.6) * 16;
       L.trail.scale.y = Math.max(0.01, hgt);
-      L.trail.rotation.z = -L.bend * k;
-      L.head.position.set(Math.sin(-L.trail.rotation.z) * -hgt, hgt, 0.01);
+      // the trail leans left as it climbs, and the bead rides its tip
+      const lean = L.bend * k;
+      L.trail.rotation.z = lean;
+      L.head.position.set(-Math.sin(lean) * hgt, Math.cos(lean) * hgt, 0.01);
       const fade = k < 0.8 ? 1 : 1 - (k - 0.8) / 0.2;
       L.trail.material.opacity = 0.55 * fade * (1 - k * 0.5);
       L.head.material.opacity = fade;
@@ -417,9 +499,20 @@ export function flare(p = {}) {
     petals.forEach((pm) => pm.scale.set(1, 0.01 + k * 1.6, 1));
   };
   g.userData.setOpen(open);
+  let side = 0;
   g.userData.tick = (dt, t) => {
     s.material.opacity = 0.85 + Math.sin(t * 3) * 0.1;
-    g.position.x = fitX(p.x ?? 10, 2.5);
+    // Not on the Spindle's thread (on phones the narrow sky would put it
+    // right there): it keeps 3 units to one side of it, the side it
+    // opens on (the right, if there is room there), and follows the
+    // thread as the view pulls back.
+    let x = fitX(p.x ?? 10, 2.5);
+    const spx = spindleX(g.parent);
+    if (spx != null) {
+      side ||= x > spx + 0.5 && fitX(spx + 3, 2.5) >= spx + 2.9 ? 1 : -1;
+      x = fitX(side > 0 ? Math.max(x, spx + 3) : Math.min(x, spx - 3), 2.5);
+    }
+    g.position.x = x;
   };
   return g;
 }
