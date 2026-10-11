@@ -219,8 +219,10 @@ function car(b, r, x, z, flip) {
 // then the long rise of the hill to its crest. (Beyond the crest it belongs
 // to the far district: see farDistrict().)
 const LAND_ZS = [-21.3, -24, -27.5, -29, -30.5, -32, -33.5, -35, -36.5, -38, -39.5, -41, HILL.crest];
+// (screen-x extent and grid step: the far land beyond the crest uses the same)
+const LAND = LITE ? { sx0: -40, sx1: 52, step: 6 } : { sx0: -60, sx1: 72, step: 3 };
 function land(b, t) {
-  b.geos.push(landStrip(LITE ? -40 : -60, LITE ? 52 : 72, LITE ? 6 : 3, LAND_ZS, (z) => Math.min(1, Math.max(0, (-z - 25) / 12)), t.bank, t.hill));
+  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LAND_ZS, (z) => Math.min(1, Math.max(0, (-z - 25) / 12)), t.bank, t.hill));
 }
 
 // A strip of ground following the terrain, from screen-x SX0 to SX1, through
@@ -270,10 +272,10 @@ function landStrip(SX0, SX1, step, zs, k, c0, c1) {
 // most of their colour from the sky right behind them.
 function farDistrict(t) {
   const b = new Batch();
-  const SX0 = LITE ? -46 : -78, SX1 = LITE ? 58 : 90, Z = -95;
+  const SX0 = LITE ? -46 : -76, SX1 = LITE ? 56 : 86, Z = -95;
   // the land, first in the batch so it hides the foot of the district cheaply
   // (on the same grid as the hill's, so they meet without a seam)
-  b.geos.push(landStrip(SX0, SX1, LITE ? 6 : 3, LITE ? [HILL.crest, Z - 0.3] : [HILL.crest, -52, -64, -78, Z - 0.3], (z) => Math.min(1, (HILL.crest - z) / 40), t.hill, t.ridge[1]));
+  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LITE ? [HILL.crest, Z - 0.3] : [HILL.crest, -52, -64, -78, Z - 0.3], (z) => Math.min(1, (HILL.crest - z) / 40), t.hill, t.ridge[1]));
   const r = rng(911);
   const steps = [];
   for (let sx = SX0; sx < SX1;) {
