@@ -612,7 +612,8 @@ export function riverside(p = {}) {
 // ---------------------------------------------------------------------------
 // Construction cranes
 
-// (mast and arm are a mesh each: the arm turns, so the crane can't be merged whole)
+// (mast and arm are a mesh each: the arm turns, so the crane can't be merged
+// whole; except on phones, where it holds still)
 // `dir`: which way the jib reaches on screen (1 right, -1 left, 0 either, by
 // `seed`). Its angle comes from `seed`, so it is the same on every load.
 function crane(h, jib, color = '#e8b923', { dir = 0, seed = 1 } = {}) {
@@ -633,7 +634,6 @@ function crane(h, jib, color = '#e8b923', { dir = 0, seed = 1 } = {}) {
   const lightM = new THREE.MeshBasicMaterial({ color: '#ff3b2a' });
   const light = new THREE.Mesh(new THREE.SphereGeometry(0.12, 6, 4), lightM);
   light.position.set(0, 1.4, 0);
-  arm.add(light);
   // Jibs swing slowly to and fro across the view, where they read best
   // side-on (angle 0 reaches right, PI left), never far round towards or
   // away from the camera.
@@ -641,12 +641,53 @@ function crane(h, jib, color = '#e8b923', { dir = 0, seed = 1 } = {}) {
   const amp = 0.16 + r() * 0.16, w = 0.05 + r() * 0.04, ph = r() * 6.3;
   arm.rotation.y = base + amp * Math.sin(ph);
   g.add(arm);
+  const blink = (t) => (light.visible = G.night > 0.3 && Math.sin(t * 2.5) > 0);
+  if (LITE) {
+    // On phones the jib holds still, and mast and arm are one mesh. (The
+    // light sits where the arm turns, so it needn't turn with it.)
+    const one = collapse(g);
+    light.position.y += h;
+    one.add(light);
+    one.userData.tick = (dt, t) => blink(t);
+    one.userData.h = h + 1;
+    return one;
+  }
+  arm.add(light);
   g.userData.tick = (dt, t) => {
     arm.rotation.y = base + amp * Math.sin(t * w + ph);
-    light.visible = G.night > 0.3 && Math.sin(t * 2.5) > 0;
+    blink(t);
   };
   g.userData.h = h + 1;
   return g;
+}
+
+// The meshes under `root` as one mesh per material, in a new group standing
+// where root does, keeping their vertex colours (world.js's merge drops them).
+// For phones' skyline, whose many small things a landscape phone sees all at
+// once: each mesh is a draw call.
+function collapse(root) {
+  root.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const by = new Map(), m = new THREE.Matrix4();
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const geo = o.geometry.index ? o.geometry.toNonIndexed() : o.geometry.clone();
+    geo.applyMatrix4(m.multiplyMatrices(inv, o.matrixWorld));
+    if (!by.has(o.material)) by.set(o.material, []);
+    by.get(o.material).push(geo);
+  });
+  const out = new THREE.Group();
+  out.position.copy(root.position);
+  out.quaternion.copy(root.quaternion);
+  out.scale.copy(root.scale);
+  for (const [mat, geos] of by) {
+    const merged = geos.length > 1 ? mergeGeometries(geos, false) : geos[0];
+    if (geos.length > 1) for (const g of geos) g.dispose();
+    merged.computeBoundingSphere();
+    out.add(new THREE.Mesh(merged, mat));
+  }
+  root.traverse((o) => { if (o.isMesh) o.geometry.dispose(); });
+  return out;
 }
 
 // at: [[sx, z, height, jib]]. Heights are eased down (7 -> 6, 8 -> 6.5): from
@@ -700,12 +741,14 @@ export function plume(o = {}) {
     puffs.push(s);
   }
   const rise = o.rise ?? 5, size = o.size ?? 1.6, speed = o.speed ?? 0.12;
+  // (`wide`: a broad plume, over several stacks side by side)
+  const wide = o.wide ?? 1;
   g.userData.tick = (dt, t) => {
     for (const s of puffs) {
       const k = (t * speed + s.userData.phase) % 1;
       s.position.set(Math.sin(k * 3 + s.userData.phase * 9) * 0.3 + k * (o.drift ?? 1.5), k * rise, 0);
       const sc = size * (0.4 + k * 1.4);
-      s.scale.set(sc, sc, 1);
+      s.scale.set(sc * (wide + (1 - wide) * k * 0.5), sc, 1);
       s.material.opacity = Math.sin(k * Math.PI) * (o.opacity ?? 0.55) * (G.night > 0.7 ? 0.6 : 1);
     }
   };
@@ -806,7 +849,15 @@ export function meridian(p = {}) {
   for (let i = 0; i < stacks; i++) {
     const x = -W / 2 + 1 + i * 1.8;
     sb.cyl(0.45, 0.6, 1.4, '#9aa3ab', x, 0, -0.5, { seg: LITE ? 8 : 12 });
-    if (p.steam !== false) {
+    // (on phones, a broader plume over each pair of stacks: each puff of
+    // steam is a draw call of its own)
+    if (p.steam !== false && LITE && stacks > 2) {
+      if (i % 2 === 0) {
+        const pl = plume({ rise: 6, size: 2.2, speed: 0.1 + i * 0.01, opacity: 0.6, wide: 1.8 });
+        pl.position.set(x + 0.9, 1.4, -0.5);
+        roof.add(pl);
+      }
+    } else if (p.steam !== false) {
       const pl = plume({ rise: 6, size: 2.2, speed: 0.1 + i * 0.01, opacity: 0.5 });
       pl.position.set(x, 1.4, -0.5);
       roof.add(pl);
@@ -887,8 +938,14 @@ export function datacentres(p = {}) {
       for (let x = -w / 2 + 0.3; x < w / 2; x += LITE ? 0.75 : 0.5) b.box(0.1, 3.0, 0.08, '#5d6b7a', x, 0, d / 2 + 0.04);
       for (let k = 0; k < 3; k++) b.cyl(0.35, 0.45, 1.1, '#9aa3ab', -w / 2 + 1 + k * 1.6, 3.2, 0, { seg: 8 });
       dc.add(b.mesh(batchMat()));
-      for (let k = 0; k < 3; k++) {
-        if (p.steam !== false) {
+      // (on phones, where it is a few pixels across, one broad plume over
+      // its three stacks: each puff of steam is a draw call of its own)
+      if (p.steam !== false && LITE) {
+        const pl = plume({ rise: 5, size: 1.8, speed: 0.11, wide: 3, opacity: 0.7 });
+        pl.position.set(-w / 2 + 1 + 1.6, 4.3, 0);
+        dc.add(pl);
+      } else if (p.steam !== false) {
+        for (let k = 0; k < 3; k++) {
           const pl = plume({ rise: 5, size: 1.8, speed: 0.11 + k * 0.013 });
           pl.position.set(-w / 2 + 1 + k * 1.6, 4.3, 0);
           dc.add(pl);
@@ -1008,6 +1065,15 @@ export function newTowers(p = {}) {
     // the hotspot marker sits on the first (most central) tower's spire
     if (i === 0) g.userData.anchor = new THREE.Vector3(t.position.x, t.position.y + hh * 0.75, z);
   }
+  if (LITE) {
+    // On phones they are one mesh for all their bodies and one for their
+    // lights, and rise together: from a landscape phone's lower angle all of
+    // them are in view at once, and each mesh is a draw call.
+    const one = collapse(g);
+    one.userData.h = 8;
+    one.userData.anchor = g.userData.anchor;
+    return one;
+  }
   return g;
 }
 
@@ -1125,23 +1191,36 @@ export function gardenCity(p = {}) {
   const spots = [[-12, -35.6, 8.5], [-3.5, -33.8, 9.5], [3, -39.4, 7.5], [15, -35.6, 9], [22, -38.4, 7], [-20, -36.6, 7], [-8, -39.8, 8.5]];
   const white = plainMist('#f4f1e8');
   const glassy = plainMist('#cfe2e6');
+  // (on phones each tower, and each floating garden, is one vertex-coloured
+  // mesh: from a landscape phone's lower angle all of them are in view)
   for (const [sx, z, h] of spots) {
     const t = new THREE.Group();
     const levels = Math.round(h / 1.9);
+    const b = LITE ? new Batch() : null;
     for (let i = 0; i < levels; i++) {
       const rr = 1.15 - (i / levels) * 0.45 + Math.sin(i * 1.7 + sx) * 0.12;
-      const disc = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr * 0.92, 0.22, 14), white);
-      disc.position.y = i * 1.9 + 0.11;
-      t.add(disc);
-      const core = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.5, rr * 0.55, 1.68, 12), glassy);
-      core.position.y = i * 1.9 + 1.06;
-      t.add(core);
+      if (b) {
+        b.cyl(rr, rr * 0.92, 0.22, '#f4f1e8', 0, i * 1.9, 0, { seg: 14 });
+        b.cyl(rr * 0.5, rr * 0.55, 1.68, '#cfe2e6', 0, i * 1.9 + 0.22, 0, { seg: 12 });
+      } else {
+        const disc = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr * 0.92, 0.22, 14), white);
+        disc.position.y = i * 1.9 + 0.11;
+        t.add(disc);
+        const core = new THREE.Mesh(new THREE.CylinderGeometry(rr * 0.5, rr * 0.55, 1.68, 12), glassy);
+        core.position.y = i * 1.9 + 1.06;
+        t.add(core);
+      }
       for (let k = 0; k < 3; k++) {
         const a = (k / 3) * Math.PI * 2 + i * 0.9;
-        t.add(placeIco(0.22 + r() * 0.12, ['#5f9a4a', '#7fae4a', '#8fbf5a'][k % 3], Math.cos(a) * rr * 0.82, i * 1.9 + 0.38, Math.sin(a) * rr * 0.82));
+        const args = [0.22 + r() * 0.12, ['#5f9a4a', '#7fae4a', '#8fbf5a'][k % 3], Math.cos(a) * rr * 0.82, i * 1.9 + 0.38, Math.sin(a) * rr * 0.82];
+        if (b) b.ico(...args);
+        else t.add(placeIco(...args));
       }
     }
-    t.add(placeIco(0.7, '#6fa85a', 0, levels * 1.9 + 0.25, 0));
+    if (b) {
+      b.ico(0.7, '#6fa85a', 0, levels * 1.9 + 0.25, 0);
+      t.add(b.mesh(batchMat()));
+    } else t.add(placeIco(0.7, '#6fa85a', 0, levels * 1.9 + 0.25, 0));
     t.userData.h = levels * 1.9 + 1;
     t.scale.setScalar(rowScale(z));
     place(t, sx, z, -0.05);
@@ -1150,13 +1229,25 @@ export function gardenCity(p = {}) {
   // Floating gardens: islands of trees hanging in the air, tethered by a thread.
   for (const [sx, z, y] of [[-9, -30, 6.5], [18, -32, 7], [4.5, -28, 8]]) {
     const isl = new THREE.Group();
-    const rock = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.7, 7), plainMist('#a8977f', { flatShading: true, k: 0.6 }));
-    rock.rotation.x = Math.PI;
-    isl.add(rock);
-    for (let k = 0; k < 5; k++) isl.add(placeIco(0.35 + r() * 0.3, ['#5f9a4a', '#7fae4a'][k % 2], (r() - 0.5) * 1.6, 0.95, (r() - 0.5) * 1.6));
-    const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, y + 3, 4), plainMist('#ffffff'));
-    thread.position.y = -(y + 3) / 2;
-    isl.add(thread);
+    if (LITE) {
+      const b = new Batch();
+      // (the rock's faces flat, as flatShading draws them)
+      const cone = new THREE.ConeGeometry(1.5, 1.7, 7).toNonIndexed();
+      cone.computeVertexNormals();
+      b.add(cone, '#a8977f', { rx: Math.PI });
+      cone.dispose();
+      for (let k = 0; k < 5; k++) b.ico(0.35 + r() * 0.3, ['#5f9a4a', '#7fae4a'][k % 2], (r() - 0.5) * 1.6, 0.95, (r() - 0.5) * 1.6);
+      b.cyl(0.015, 0.015, y + 3, '#ffffff', 0, -(y + 3), 0, { seg: 4 });
+      isl.add(b.mesh(batchMat(0.8)));
+    } else {
+      const rock = new THREE.Mesh(new THREE.ConeGeometry(1.5, 1.7, 7), plainMist('#a8977f', { flatShading: true, k: 0.6 }));
+      rock.rotation.x = Math.PI;
+      isl.add(rock);
+      for (let k = 0; k < 5; k++) isl.add(placeIco(0.35 + r() * 0.3, ['#5f9a4a', '#7fae4a'][k % 2], (r() - 0.5) * 1.6, 0.95, (r() - 0.5) * 1.6));
+      const thread = new THREE.Mesh(new THREE.CylinderGeometry(0.015, 0.015, y + 3, 4), plainMist('#ffffff'));
+      thread.position.y = -(y + 3) / 2;
+      isl.add(thread);
+    }
     const base = new THREE.Group();
     base.add(isl);
     isl.position.y = y;

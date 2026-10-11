@@ -54,9 +54,9 @@ function cardRect() {
 
 // The local z, in the sky layer, that puts a point at (x, y) of the layer at
 // world depth `z`. Things in the sky that should show in front of the far
-// district (a flat cut-out at z -95, which on tall phones rises into the
-// sky under the date card) and the land that runs back to it from the
-// crest (surrounds.js), but behind the city, its hill and the Spindle
+// district (city.js: a row of pale blocks and towers at z -95, which on tall
+// phones rises into the sky under the date card) and the land that runs back
+// to it from the crest (surrounds.js), but behind the city, its hill and the Spindle
 // (z -48.5), use a z just behind the Spindle (SKY_FRONT): the camera is
 // orthographic, so this changes nothing else about them.
 const SKY_FRONT = -50.5;
