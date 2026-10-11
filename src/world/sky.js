@@ -74,8 +74,13 @@ export function moon(p = {}) {
       g.add(d);
     }
   }
-  g.position.set(p.x ?? -14, p.y ?? 9, 0);
-  g.userData.tick = () => { g.position.x = fitX(p.x ?? -14, 2.5); };
+  // Clear of the skyline: high in the band of sky on a landscape screen, a
+  // little lower on tall ones, whose frame has more sky above the city.
+  g.position.set(p.x ?? -3, p.y ?? 11, 0);
+  g.userData.tick = () => {
+    g.position.x = fitX(p.x ?? -3, 2.5);
+    g.position.y = (p.y ?? 11) - 2 * G.tall;
+  };
   if (p.day) {
     m.transparent = true;
     m.opacity = 0.5;

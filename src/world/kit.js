@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/examples/jsm/geometries/RoundedBoxGeometry.js';
 import { mistUniforms, SKY_GLSL } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
+import { GROUND_GLSL } from './terrain.js';
 
 // On the lite tier every lit surface uses the much cheaper Lambert shader.
 export function stdMat(params = {}) {
@@ -64,14 +65,24 @@ export function mat(color, opts = {}) {
   return m;
 }
 
-// Fade far-away things into exactly the colour of the sky behind them, like
-// layers of a paper theatre: each layer further back (in world z, so a whole
-// row fades evenly) is paler, and the further back it is, the deeper its foot
-// stands in the ground mist. `k` scales the haze for one material.
-export function addMist(m, k = 1) {
+// Everything misted is outdoors and at least a garden away from the kitchen's
+// lamps, whose short-range point lights can't reach it: leave them out of
+// these shaders altogether, which makes the city and the neighbourhood (most
+// of the screen) cheaper to draw.
+const LIGHTS_NO_POINT = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( NUM_POINT_LIGHTS > 0 ) && defined( RE_Direct )', '#if 0');
+
+// Fade far-away things towards the colour of the air near the horizon, more
+// with each row back (by world z, so a row fades as a whole), and let a thin,
+// uneven ground mist lie on the land: it pools in places and thins in others,
+// drifts slowly, and takes the colour of the sky right behind, so it reads as
+// air rather than as a wall of fog. `k` scales the haze for one material;
+// `sil` instead makes it a silhouette against the sky right behind it (for
+// the furthest flats).
+export function addMist(m, k = 1, sil = 0) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, mistUniforms);
     shader.uniforms.uMistK = { value: k };
+    shader.uniforms.uSil = { value: sil };
     shader.vertexShader = shader.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec3 vMistW;')
       .replace(
@@ -86,11 +97,12 @@ export function addMist(m, k = 1) {
         }`
       );
     shader.fragmentShader = shader.fragmentShader
+      .replace('#include <lights_fragment_begin>', LIGHTS_NO_POINT)
       .replace(
         '#include <emissivemap_fragment>',
         `#include <emissivemap_fragment>
         // lit windows dim with distance too
-        totalEmissiveRadiance *= 1.0 - 0.55 * uMistK * clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);`
+        totalEmissiveRadiance *= 1.0 - 0.5 * uMistK * clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);`
       )
       .replace(
         '#include <common>',
@@ -99,32 +111,46 @@ export function addMist(m, k = 1) {
         uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBottom; uniform float uMidPos;
         uniform vec3 uGlowColor; uniform vec2 uGlowPos; uniform float uGlowSize; uniform float uGlowStrength; uniform float uAspect; uniform float uHorizon;
         uniform vec2 uRes; uniform float uMistLow; uniform float uMistHigh; uniform float uFogNear; uniform float uFogFar; uniform float uFogFloor;
-        uniform float uMistK;
-        ${SKY_GLSL}`
+        uniform float uMistK; uniform float uMistTime; uniform float uSil;
+        ${SKY_GLSL}
+        ${GROUND_GLSL}
+        float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        float mistNoise(vec2 p) {
+          vec2 i = floor(p), f = fract(p);
+          f = f * f * (3.0 - 2.0 * f);
+          return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), f.x), mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0, 1.0)), f.x), f.y);
+        }`
       )
       .replace(
         '#include <fog_fragment>',
         `float dk = clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);
-        float fogF = min(0.88, (uFogFloor * 2.2 + 0.2) * pow(dk, 1.6)) * uMistK;
-        float hazeTop = uMistLow + (uMistHigh - uMistLow) * dk;
-        float mistF = (1.0 - smoothstep(uMistLow - 0.2, hazeTop, vMistW.y)) * smoothstep(0.3, 0.6, dk);
-        // The ground mist takes the colour of the sky right behind (so gaps
-        // and feet vanish into it); the haze on a whole row takes the colour
-        // of the air lower down, nearer the horizon, so far rows turn pale.
-        vec2 suv = gl_FragCoord.xy / uRes;
-        vec3 skyc = skyAt(suv);
-        vec3 airc = skyAt(vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
-        #ifdef TONE_MAPPING
-          skyc = toneMapping(skyc);
-          airc = toneMapping(airc);
-        #endif
-        skyc = linearToOutputTexel(vec4(skyc, 1.0)).rgb;
-        airc = linearToOutputTexel(vec4(airc, 1.0)).rgb;
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, airc, clamp(fogF, 0.0, 1.0));
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, skyc, clamp(mistF, 0.0, 1.0));`
+        // aerial haze: a whole row turns paler, more with each row back
+        float fogF = min(0.9, (uFogFloor * 2.2 + 0.2) * pow(dk, 0.85)) * uMistK;
+        // ground mist: patchy along each row, deeper and denser further back
+        float n = mistNoise(vec2(vMistW.x * 0.23 + uMistTime * 0.04, vMistW.z * 0.41 - uMistTime * 0.015));
+        float g = groundY(vMistW);
+        float top = g + (uMistLow + uMistHigh * dk) * (0.4 + n);
+        float mistF = (1.0 - smoothstep(g - 0.05, top, vMistW.y)) * smoothstep(0.0, 0.45, dk) * (0.3 + 0.35 * dk + 0.5 * n) * step(-70.0, vMistW.z) * min(1.0, uMistK);
+        mistF = max(mistF, uSil);
+        fogF *= 1.0 - uSil;
+        float w = fogF * (1.0 - mistF) + mistF;
+        if (w > 0.003) {
+          // The mist takes the colour of the sky right behind (so it reads as
+          // air), the haze the colour of the air nearer the horizon (so far
+          // rows turn pale). Mixed first, then tone-mapped once.
+          vec2 suv = gl_FragCoord.xy / uRes;
+          vec3 skyc = skyAt(suv);
+          vec3 airc = skyAt(vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
+          vec3 c = (airc * fogF * (1.0 - mistF) + skyc * mistF) / w;
+          #ifdef TONE_MAPPING
+            c = toneMapping(c);
+          #endif
+          c = linearToOutputTexel(vec4(c, 1.0)).rgb;
+          gl_FragColor.rgb = mix(gl_FragColor.rgb, c, clamp(w, 0.0, 1.0));
+        }`
       );
   };
-  m.customProgramCacheKey = () => 'mist3';
+  m.customProgramCacheKey = () => 'mist4';
   return m;
 }
 
@@ -137,7 +163,7 @@ function shadow(mesh, cast = true, receive = true) {
 export function box(w, h, d, color, o = {}) {
   const r = o.r ?? 0;
   const geo = r > 0
-    ? cachedGeo(`rb${w},${h},${d},${r}`, () => new RoundedBoxGeometry(w, h, d, 2, Math.min(r, w / 2, h / 2, d / 2)))
+    ? cachedGeo(`rb${w},${h},${d},${r}`, () => new RoundedBoxGeometry(w, h, d, QUALITY.lite ? 1 : 2, Math.min(r, w / 2, h / 2, d / 2)))
     : cachedGeo(`b${w},${h},${d}`, () => new THREE.BoxGeometry(w, h, d));
   const m = new THREE.Mesh(geo, o.mat || mat(color, o.m));
   m.position.set(o.x || 0, (o.y || 0) + h / 2, o.z || 0);
@@ -268,6 +294,10 @@ export function repaintAllTextures() {
   }
 }
 
+function repaintTexture(t) {
+  for (const e of drawn) if (e.t === t) { try { repaint(e); } catch (err) { /* keep going */ } }
+}
+
 export function canvasTex(key, w, h, draw, opts = {}) {
   if (texCache.has(key)) return texCache.get(key);
   const t = markCached(drawnTexture(w, h, draw));
@@ -286,7 +316,8 @@ export function canvasTex(key, w, h, draw, opts = {}) {
 
 // Text on a sign/poster.
 export function textTex(key, lines, { w = 512, h = 256, bg = '#fff', fg = '#222', font = '600 64px "Fraunces", Georgia, serif', align = 'center', pad = 20, lineH = 1.1, border } = {}) {
-  return canvasTex('txt:' + key, w, h, (ctx) => {
+  const has = texCache.has('txt:' + key);
+  const t = canvasTex('txt:' + key, w, h, (ctx) => {
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, w, h);
     if (border) {
@@ -295,16 +326,29 @@ export function textTex(key, lines, { w = 512, h = 256, bg = '#fff', fg = '#222'
       ctx.strokeRect(5, 5, w - 10, h - 10);
     }
     ctx.fillStyle = fg;
-    ctx.font = font;
     ctx.textAlign = align;
     ctx.textBaseline = 'middle';
-    const size = parseInt(font.match(/(\d+)px/)[1], 10);
+    // Shrink the type until the longest line fits inside the border, whatever
+    // font the browser actually has.
+    let size = parseInt(font.match(/(\d+)px/)[1], 10);
+    const room = w - 2 * Math.max(pad, border ? 26 : 12);
+    for (let i = 0; i < 12; i++) {
+      ctx.font = font.replace(/\d+px/, size + 'px');
+      const widest = Math.max(...lines.map((ln) => ctx.measureText(ln).width));
+      if (widest <= room) break;
+      size = Math.floor(size * Math.max(0.6, room / widest));
+    }
     const total = lines.length * size * lineH;
     lines.forEach((ln, i) => {
       const y = h / 2 - total / 2 + size * lineH * (i + 0.5);
       ctx.fillText(ln, align === 'center' ? w / 2 : pad, y);
     });
   });
+  // Web fonts load lazily; draw the sign again once its font has arrived.
+  if (!has && typeof document !== 'undefined' && document.fonts && !document.fonts.check(font)) {
+    document.fonts.load(font).then(() => repaintTexture(t)).catch(() => {});
+  }
+  return t;
 }
 
 // Lit-window pattern for city buildings. Used as both map and emissive map.

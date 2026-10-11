@@ -12,6 +12,7 @@ export const G = {
   weather: 'none',
   reducedMotion: false,
   skyHalfW: 21.6, // half the width of the sky layer currently in view (sky.js units)
+  tall: 0, // 0 on landscape screens, 1 on tall portrait ones
 };
 
 // The sky gradient. Shared with the city's materials so that distant things can
@@ -35,12 +36,13 @@ export const skyUniforms = {
 export const mistUniforms = {
   ...skyUniforms,
   uMist: { value: new THREE.Color('#c9b8a8') },
-  uMistLow: { value: 0.0 }, // ground level
-  uMistHigh: { value: 3.2 }, // how high the ground mist reaches at the back
+  uMistLow: { value: 0.12 }, // depth of the ground mist at the river...
+  uMistHigh: { value: 2.0 }, // ...and how much deeper it gets towards the back
+  uMistTime: { value: 0 }, // drifts the mist
   uRes: { value: new THREE.Vector2(1, 1) },
-  // World z where the haze begins (just past the back gardens) and where it is total.
-  uFogNear: { value: -14 },
-  uFogFar: { value: -40 },
+  // World z where the haze begins (the river) and where it is total.
+  uFogNear: { value: -18 },
+  uFogFar: { value: -62 },
   uFogFloor: { value: 0.4 },
 };
 
@@ -90,8 +92,8 @@ void main() {
 // try other angles quickly. The city is laid out for the defaults.
 const DEG = Math.PI / 180;
 // Tall (portrait) screens look from a little higher: the house is small
-// there, and the city rows spread up the extra height.
-export const VIEW_DEFAULT = { az: 16 * DEG, el: 17 * DEG, elTall: 24 * DEG, frustum: 25, fitW: 24.5 };
+// there, and the city climbing its hill spreads up the extra height.
+export const VIEW_DEFAULT = { az: 16 * DEG, el: 18.5 * DEG, elTall: 27 * DEG, frustum: 25, fitW: 25.6 };
 export const VIEW = { ...VIEW_DEFAULT };
 {
   const q = new URLSearchParams(location.search);
@@ -139,8 +141,18 @@ export class Stage {
       target: new THREE.Vector3(3.3, 2.0, -1.0),
       frustum: VIEW.frustum,
       fitW: VIEW.fitW, // world units that must fit across on narrow screens
-      street: new THREE.Vector3(3.6, 0, 8.6), // front edge of the street, kept near the bottom of the frame
+      street: new THREE.Vector3(3.6, 0, 8.6), // front edge of the street, kept just above the bottom bar
+      // The cut-away room: its front-left corner keeps a margin from the
+      // screen's left edge on narrow screens, and its box is what the phone's
+      // bottom sheet lifts into view.
+      roomLeft: new THREE.Vector3(-8.6, 0, 0.3),
+      roomTop: new THREE.Vector3(-4.2, 2.9, -6.6),
+      roomBottom: new THREE.Vector3(-4.2, 0, 0.8),
     };
+    // Screen space (CSS px) taken by the bar along the bottom; the street sits
+    // just above it. The game keeps this up to date; it eases, so the camera
+    // glides when the bar comes and goes (title, kettle, ending).
+    this.inset = { bottom: 0, bottomT: 0, init: false };
     // Things the player (or the story) can nudge.
     this.cam = {
       zoom: 1, zoomT: 1,
@@ -291,7 +303,8 @@ export class Stage {
     this.width = w;
     this.height = h;
     const v = this.view;
-    v.el = v.elWide + (v.elTall - v.elWide) * clamp((1.0 - w / h) / 0.5, 0, 1);
+    G.tall = this.tallness();
+    v.el = v.elWide + (v.elTall - v.elWide) * G.tall;
     this.skyUniforms.uAspect.value = w / h;
     this.renderer.getDrawingBufferSize(mistUniforms.uRes.value);
   }
@@ -353,40 +366,103 @@ export class Stage {
     this.cam.panYT = 0;
   }
 
+  // 0 on landscape screens, 1 on tall portrait ones (aspect 0.5 or less).
+  tallness() {
+    return clamp((1.0 - this.width / this.height) / 0.5, 0, 1);
+  }
+
+  // The height (CSS px) of the bar along the bottom of the screen, which the
+  // street sits just above. 0 when nothing is there (title, kettle, ending).
+  setBottomInset(px) {
+    this.inset.bottomT = px;
+    if (!this.inset.init) {
+      this.inset.init = true;
+      this.inset.bottom = px;
+    }
+  }
+
   // Frame height before any zoom: on narrow screens the house, garden and
-  // next door still fit across, and the extra height goes to the sky.
+  // next door still fit across, and the extra height goes to the city and sky.
   frustumBase() {
     const aspect = this.width / this.height;
     return Math.max(this.view.frustum, this.view.fitW / aspect);
   }
 
+  // Story pull-backs (kettle, ending) open up less on tall screens, whose
+  // frame is already tall.
+  pullback() {
+    return 1 - (1 - this.cam.extraZoom) * (1 - 0.45 * this.tallness());
+  }
+
   frustumH() {
-    return this.frustumBase() / (this.cam.zoom * this.cam.extraZoom);
+    return this.frustumBase() / (this.cam.zoom * this.pullback());
+  }
+
+  _rel(p, axis) {
+    return (this._tmpV ||= new THREE.Vector3()).copy(p).sub(this.view.target).dot(axis);
+  }
+
+  // Share of the frame (from the bottom) below the front of the street.
+  _streetShare() {
+    return Math.max(0.03, (this.inset.bottom + 12) / this.height);
   }
 
   // Where the middle of the frame sits above the target: the front of the
-  // street stays near the bottom (higher on phones, where the controls take
-  // more room) and the rest of the frame is city and sky. Story pull-backs
-  // (extraZoom) keep the street where it is and open up more sky; the
-  // player's own zoom pivots on the middle of the view.
+  // street sits just above the bottom bar, and the rest of the frame is city
+  // and sky. Story pull-backs keep the street where it is and open up the
+  // world above it; the player's own zoom pivots on the middle of the view.
   frameOffsetY() {
-    const fb = this.frustumBase() / this.cam.extraZoom;
-    const v = this.view;
-    const up = (this._camUp ||= new THREE.Vector3());
-    const drop = (this._tmpV ||= new THREE.Vector3()).copy(v.target).sub(v.street).dot(up);
-    const aspect = this.width / this.height;
-    // (the timeline bar along the bottom is ~80px tall, which is a lot of a short screen)
-    const f = Math.max(0.075 + 0.13 * clamp((1.2 - aspect) / 0.6, 0, 1), Math.min(0.24, 80 / this.height));
-    return fb / 2 - drop - f * fb;
+    const fb = this.frustumBase() / this.pullback();
+    const up = (this._camUp ||= new THREE.Vector3(0, 1, 0));
+    const drop = -this._rel(this.view.street, up);
+    return fb / 2 - drop - this._streetShare() * fb;
   }
 
-  // The vertical shift (as a share of the frame) that brings the target to
-  // `frac` of the way down the screen: used to lift the house above the
-  // phone's bottom sheet.
-  sheetShift(frac) {
-    const fb = this.frustumBase();
-    const atNow = 0.5 + this.frameOffsetY() / fb;
-    return frac - atNow;
+  // Narrow screens: slide the frame left until the room's front-left corner
+  // is at least ~30px from the edge (clear of edge-swipe gestures). The
+  // garden and next door give way on the right instead.
+  frameOffsetX() {
+    const fb = this.frustumBase() / this.pullback();
+    const fw = fb * (this.width / this.height);
+    const right = (this._camRight ||= new THREE.Vector3(1, 0, 0));
+    const left = this._rel(this.view.roomLeft, right);
+    const m = (30 * fw) / this.width;
+    return Math.min(0, left - m + fw / 2);
+  }
+
+  // The vertical shift (as a share of the frame) that centres the room in
+  // the strip between the date card (`topPx`) and a bottom sheet covering
+  // `frac` of the screen. If the strip is shorter than the room, the room's
+  // top stays clear of the date card.
+  sheetShift(frac, topPx = 0) {
+    const fh = this.frustumH();
+    const up = (this._camUp ||= new THREE.Vector3(0, 1, 0));
+    const c = this.cam;
+    const sy = c.panY + c.extraPanY + this.frameOffsetY();
+    const h = this.height;
+    // screen fractions (from the top) of the room's top and bottom, unshifted
+    const top = 0.5 - (this._rel(this.view.roomTop, up) - sy) / fh;
+    const bot = 0.5 - (this._rel(this.view.roomBottom, up) - sy) / fh;
+    const s0 = (topPx + 8) / h, s1 = 1 - frac - 6 / h;
+    // shift s moves everything down the screen by s (as a share of it)
+    let s = (s0 + s1) / 2 - (top + bot) / 2;
+    if (top + s < s0) s = s0 - top;
+    // (a positive shiftY raises the frame, which moves everything down)
+    return s;
+  }
+
+  // Keep the player's pan from wandering off into empty ground below the
+  // street (most of all when zoomed out).
+  _clampPan(fh, sy0) {
+    const c = this.cam;
+    const up = this._camUp;
+    const street = this._rel(this.view.street, up);
+    const fb = this.frustumBase() / this.pullback();
+    const maxBand = Math.max(this._streetShare() * fb + 1.2, 0.2 * fh);
+    // frame bottom = sy0 + panY - fh / 2 must stay above street - maxBand
+    // (never pushes the default view itself, pan 0, upwards)
+    const lo = Math.min(0, street - maxBand + fh / 2 - sy0);
+    if (c.panYT < lo) c.panYT = lo;
   }
 
   _updateCamera(dt) {
@@ -397,25 +473,30 @@ export class Stage {
     c.panY = lerp(c.panY, c.panYT, k);
     c.shift = lerp(c.shift, c.shiftT, 1 - Math.exp(-dt * 4));
     c.shiftY = lerp(c.shiftY, c.shiftYT, 1 - Math.exp(-dt * 4));
+    this.inset.bottom = lerp(this.inset.bottom, this.inset.bottomT, 1 - Math.exp(-dt * 2.5));
     // A little parallax sway with the mouse makes the diorama feel physical.
     if (this.mouse && !G.reducedMotion) c.swayT = (this.mouse.x - 0.5) * 0.06;
     c.sway = lerp(c.sway, c.swayT, 1 - Math.exp(-dt * 2));
 
     const v = this.view;
     const az = v.az + c.sway;
-    const el = v.el;
+    // Story pull-backs also rise, so the land beyond the city's hill comes into view.
+    const el = Math.min(32 * DEG, v.el + (1 - c.extraZoom) * 15 * DEG);
     const dir = (this._camDir ||= new THREE.Vector3()).set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
     const cam = this.camera;
     cam.position.copy(v.target).addScaledVector(dir, v.dist);
     cam.lookAt(v.target);
     cam.updateMatrixWorld();
     (this._camUp ||= new THREE.Vector3()).set(0, 1, 0).applyQuaternion(cam.quaternion);
+    (this._camRight ||= new THREE.Vector3()).set(1, 0, 0).applyQuaternion(cam.quaternion);
 
     const aspect = this.width / this.height;
     const fh = this.frustumH();
     const fw = fh * aspect;
-    const sx = c.panX + c.shift * fw;
-    const sy = c.panY + c.extraPanY + c.shiftY * fh + this.frameOffsetY();
+    const sy0 = c.extraPanY + c.shiftY * fh + this.frameOffsetY();
+    this._clampPan(fh, sy0);
+    const sx = c.panX + c.shift * fw + this.frameOffsetX();
+    const sy = c.panY + sy0;
     cam.left = -fw / 2 + sx;
     cam.right = fw / 2 + sx;
     cam.top = fh / 2 + sy;
@@ -544,6 +625,7 @@ export class Stage {
       if (this.maxDt < 1) this._adapt(raw);
       const dt = Math.min(this.maxDt, raw);
       G.time += dt;
+      mistUniforms.uMistTime.value = G.reducedMotion ? 0 : G.time;
       tweens.tick(dt);
       for (const f of this.onTick) f(dt, G.time);
       this._updateCamera(dt);

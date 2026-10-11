@@ -81,6 +81,7 @@ export const MODELS = {
   // the city
   city: city.city,
   river: city.river,
+  riverside: city.riverside,
   cranes: city.cranes,
   meridian: city.meridian,
   datacentres: city.datacentres,
@@ -111,5 +112,5 @@ export const MODELS = {
 
 export const SKY_MODELS = new Set(['stars', 'moon', 'clouds', 'swarm', 'ring', 'launches', 'flare']);
 // Big distant things rise out of the ground rather than popping in.
-export const RISE_MODELS = new Set(['city', 'cranes', 'meridian', 'datacentres', 'reactor', 'solarField', 'newTowers', 'factory', 'lattice', 'spindle', 'gardenCity', 'river']);
+export const RISE_MODELS = new Set(['city', 'riverside', 'cranes', 'meridian', 'datacentres', 'reactor', 'solarField', 'newTowers', 'factory', 'lattice', 'spindle', 'gardenCity', 'river']);
 export const FADE_MODELS = new Set(['surrounds', 'rain', 'snowfall', 'motes', 'leaves', 'petals', 'birds', 'steam', ...SKY_MODELS]);

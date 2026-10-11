@@ -389,7 +389,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'towers', target: 'towers', title: 'The new towers', isNew: true, anchor: [-11.7, 6.2, -33.5],
+        id: 'towers', target: 'towers', title: 'The new towers', isNew: true,
         body: [
           'Three new towers on the skyline, thin as needles. The first went up in nineteen days. The second took eleven. The third is still being printed, a floor a night, by a gantry that glows orange in the dark.',
           'Nobody seems to live in them yet. Nobody seems sure who they’re for.',
@@ -525,7 +525,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'spindle', target: 'spindle', title: 'The thing in the east', isNew: true, anchor: [0, 5.5, 0],
+        id: 'spindle', target: 'spindle', title: 'The thing in the east', isNew: true,
         body: [
           'Far off in the east, something is growing. It is white, and very thin, and it goes up, and up, past the height of anything that has ever been built.',
           'On the radio they call it the Spindle. Nobody has said what it’s for. June thinks it’s for reaching something.',

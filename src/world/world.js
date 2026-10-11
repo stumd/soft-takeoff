@@ -103,10 +103,11 @@ export class World {
     layer.add(obj);
     obj.updateMatrixWorld(true);
 
-    // Anchor for the hotspot marker: top-centre of the bounding box, in local space.
+    // Anchor for the hotspot marker, in local space: the model's own choice
+    // (wide or very tall things), or else the top-centre of its bounding box.
     const box = new THREE.Box3().setFromObject(obj, true);
-    let anchor = null;
-    if (!box.isEmpty()) {
+    let anchor = obj.userData.anchor ? obj.userData.anchor.clone() : null;
+    if (!anchor && !box.isEmpty()) {
       const top = new THREE.Vector3((box.min.x + box.max.x) / 2, box.max.y, (box.min.z + box.max.z) / 2);
       anchor = obj.worldToLocal(top.clone());
     }
@@ -184,7 +185,9 @@ export class World {
       const s = obj.scale.clone();
       tweens.add({ dur: dur * (kind === 'grow' ? 1.6 : 0.6), delay: Math.random() * spread * 0.3, ease: Ease.in, update: (k) => obj.scale.copy(s).multiplyScalar(Math.max(0.0001, 1 - k)), done: finish });
     } else if (kind === 'snap') {
-      tweens.add({ dur: 0.01, delay: dur * 0.4, done: finish });
+      // swapped in the same frame as its replacement appears (see spawn), so
+      // there is never a frame with no ground under the street
+      tweens.add({ dur: 0.01, delay: (opts.delay ?? 0.35) + dur * 0.5, done: finish });
     } else {
       const kids = obj.userData.stagger ? [...obj.children] : [obj];
       let left = kids.length;

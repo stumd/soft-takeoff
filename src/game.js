@@ -476,6 +476,9 @@ export class Game {
     this.world.setState(sceneEntities(0), { animate: false });
     this.stage.setEnv(SCENES[0].env, 0);
     this.index = -1;
+    // Behind the title, nudge the world right so the hoarding across the
+    // river shows beside the wordmark rather than behind it.
+    if (window.innerWidth > 720) this.stage.cam.shift = this.stage.cam.shiftT = -0.05;
   }
 
   async begin(resume) {
@@ -483,6 +486,7 @@ export class Game {
     if (audio._pendingMood != null) audio.setMood(audio._pendingMood);
     $('title').classList.add('fade');
     setTimeout(() => $('title').classList.add('hidden'), 1300);
+    this.stage.cam.shiftT = 0;
     let target = 0;
     if (resume && this.saved) target = this.saved.index || 0;
     else {
@@ -668,8 +672,12 @@ export class Game {
     this.panelOpen = true;
     const mobile = window.innerWidth <= 720;
     this.stage.cam.shiftT = mobile ? 0 : p.offsetWidth / (2 * window.innerWidth);
-    // On phones the sheet covers the lower part of the screen: lift the house into the strip above it.
-    this.stage.cam.shiftYT = mobile ? (this.stage.sheetShift ? this.stage.sheetShift(0.19) : -0.28) : 0;
+    // On phones the sheet covers the lower part of the screen: lift the house
+    // into the strip between it and the date card.
+    if (mobile && this.stage.sheetShift) {
+      const card = $('hud').classList.contains('hidden') ? null : $('hud').getBoundingClientRect();
+      this.stage.cam.shiftYT = this.stage.sheetShift(p.offsetHeight / window.innerHeight, card ? card.bottom : 0);
+    } else this.stage.cam.shiftYT = mobile ? -0.28 : 0;
     setTimeout(() => $('panel-close').focus({ preventScroll: true }), 50);
   }
 
@@ -810,7 +818,7 @@ export class Game {
 
     // Camera slowly pulls back to take in the world.
     const cam = stage.cam;
-    tweens.add({ dur: DUR, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.36 * k; cam.extraPanY = 1.0 * k; } });
+    tweens.add({ dur: DUR, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.36 * k; cam.extraPanY = 0.3 * k; } });
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
 
     let t = 0;
@@ -972,7 +980,7 @@ export class Game {
     $('tools').classList.add('hidden');
     const cam = this.stage.cam;
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
-    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 2.0 * k; } });
+    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 0.8 * k; } });
     const end = $('ending');
     end.classList.remove('hidden');
     const lines = $('end-lines');
@@ -1012,7 +1020,28 @@ export class Game {
   }
 
   // ------------------------------------------------------------------ per frame
+  // The street sits just above the bar along the bottom; with no bar (title,
+  // ending) it drops to the bottom of the screen and the world opens up
+  // above. During the kettle it stays above the subtitles.
+  _syncInset() {
+    if (!this.stage.setBottomInset) return;
+    const bar = $('bottom');
+    if (this.state === 'kettle') {
+      this.stage.setBottomInset(window.innerWidth <= 720 ? 132 : 150);
+      return;
+    }
+    const none = this.state === 'title' || this.state === 'ending';
+    if (!none && !bar.classList.contains('hidden') && (this._insetN = (this._insetN || 0) + 1) % 20 === 1) {
+      // (the timeline's top: on wide screens the button column beside it is
+      // taller, but it stands where the street has already dropped away)
+      this._barH = Math.max(0, window.innerHeight - $('timeline').getBoundingClientRect().top);
+    }
+    const est = window.innerWidth <= 720 ? 128 : window.innerHeight <= 480 ? 62 : 80;
+    this.stage.setBottomInset(none ? 0 : this._barH || est);
+  }
+
   _frame() {
+    if (!QUALITY.text) this._syncInset();
     if (!this.scene || this.state === 'title' || QUALITY.text) return;
     const hideAll = this.busy || this.state === 'kettle' || this.state === 'ending';
     const panelLeft = this.panelOpen && window.innerWidth > 720 ? window.innerWidth - $('panel').offsetWidth : Infinity;
