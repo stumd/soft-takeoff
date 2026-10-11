@@ -668,7 +668,8 @@ export class Game {
     this.panelOpen = true;
     const mobile = window.innerWidth <= 720;
     this.stage.cam.shiftT = mobile ? 0 : p.offsetWidth / (2 * window.innerWidth);
-    this.stage.cam.shiftYT = mobile ? -0.28 : 0;
+    // On phones the sheet covers the lower part of the screen: lift the house into the strip above it.
+    this.stage.cam.shiftYT = mobile ? (this.stage.sheetShift ? this.stage.sheetShift(0.19) : -0.28) : 0;
     setTimeout(() => $('panel-close').focus({ preventScroll: true }), 50);
   }
 
@@ -809,7 +810,7 @@ export class Game {
 
     // Camera slowly pulls back to take in the world.
     const cam = stage.cam;
-    tweens.add({ dur: DUR, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.36 * k; cam.extraPanY = 3.2 * k; } });
+    tweens.add({ dur: DUR, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.36 * k; cam.extraPanY = 1.0 * k; } });
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
 
     let t = 0;
@@ -971,7 +972,7 @@ export class Game {
     $('tools').classList.add('hidden');
     const cam = this.stage.cam;
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
-    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 5 * k; } });
+    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 2.0 * k; } });
     const end = $('ending');
     end.classList.remove('hidden');
     const lines = $('end-lines');

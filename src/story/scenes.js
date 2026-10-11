@@ -87,7 +87,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'meridian', target: 'meridian', title: 'Across the river', anchor: [0, 6, 2],
+        id: 'meridian', target: 'meridian', title: 'Across the river', anchor: [0, 7.4, 2],
         body: [
           'Where the old biscuit factory used to be, something enormous is going up. The cranes have been there since spring. The hoarding says MERIDIAN COMPUTE — POWERING TOMORROW.',
           'Someone has sprayed a word underneath, in red: *WHOSE?*',
@@ -203,7 +203,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'meridian', target: 'meridian', title: 'Meridian', anchor: [0, 6, 2],
+        id: 'meridian', target: 'meridian', title: 'Meridian', anchor: [0, 7.4, 2],
         body: [
           'Meridian is finished. On hot days it breathes: white plumes from its cooling stacks, lit pink by the sunset. Everybody calls it the Kettle.',
           'There’s a second one going up beside it. Nobody in the house could tell you exactly what they are for. “Training,” says the website. Training what, for what, it doesn’t say.',
@@ -389,7 +389,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'towers', target: 'towers', title: 'The new towers', isNew: true,
+        id: 'towers', target: 'towers', title: 'The new towers', isNew: true, anchor: [-11.7, 6.2, -33.5],
         body: [
           'Three new towers on the skyline, thin as needles. The first went up in nineteen days. The second took eleven. The third is still being printed, a floor a night, by a gantry that glows orange in the dark.',
           'Nobody seems to live in them yet. Nobody seems sure who they’re for.',
@@ -504,7 +504,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'meridian', target: 'meridian', title: 'The Kettle, coming down', isNew: true, anchor: [0, 6, 2],
+        id: 'meridian', target: 'meridian', title: 'The Kettle, coming down', isNew: true, anchor: [0, 7.4, 2],
         body: [
           'Meridian is coming down. Four years to build, three weeks to take apart. Robots unbolt it panel by panel and stack the pieces neatly, as if they mean to put it back together somewhere else.',
           'Whatever was being trained in there has been trained. It is somewhere else now. Everywhere else, probably.',
@@ -525,7 +525,7 @@ export const SCENES = [
         ],
       },
       {
-        id: 'spindle', target: 'spindle', title: 'The thing in the east', isNew: true,
+        id: 'spindle', target: 'spindle', title: 'The thing in the east', isNew: true, anchor: [0, 5.5, 0],
         body: [
           'Far off in the east, something is growing. It is white, and very thin, and it goes up, and up, past the height of anything that has ever been built.',
           'On the radio they call it the Spindle. Nobody has said what it’s for. June thinks it’s for reaching something.',

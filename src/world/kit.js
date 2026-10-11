@@ -64,13 +64,16 @@ export function mat(color, opts = {}) {
   return m;
 }
 
-// Fade far-away things (by depth, and towards their bottoms) into exactly the
-// colour of the sky behind them, like a city rising out of mist.
-export function addMist(m) {
+// Fade far-away things into exactly the colour of the sky behind them, like
+// layers of a paper theatre: each layer further back (in world z, so a whole
+// row fades evenly) is paler, and the further back it is, the deeper its foot
+// stands in the ground mist. `k` scales the haze for one material.
+export function addMist(m, k = 1) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, mistUniforms);
+    shader.uniforms.uMistK = { value: k };
     shader.vertexShader = shader.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vMistY;')
+      .replace('#include <common>', '#include <common>\nvarying vec3 vMistW;')
       .replace(
         '#include <project_vertex>',
         `#include <project_vertex>
@@ -79,35 +82,49 @@ export function addMist(m) {
           #ifdef USE_INSTANCING
             mwp = instanceMatrix * mwp;
           #endif
-          vMistY = (modelMatrix * mwp).y;
+          vMistW = (modelMatrix * mwp).xyz;
         }`
       );
     shader.fragmentShader = shader.fragmentShader
       .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        // lit windows dim with distance too
+        totalEmissiveRadiance *= 1.0 - 0.55 * uMistK * clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);`
+      )
+      .replace(
         '#include <common>',
         `#include <common>
-        varying float vMistY;
+        varying vec3 vMistW;
         uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBottom; uniform float uMidPos;
-        uniform vec3 uGlowColor; uniform vec2 uGlowPos; uniform float uGlowSize; uniform float uGlowStrength; uniform float uAspect;
+        uniform vec3 uGlowColor; uniform vec2 uGlowPos; uniform float uGlowSize; uniform float uGlowStrength; uniform float uAspect; uniform float uHorizon;
         uniform vec2 uRes; uniform float uMistLow; uniform float uMistHigh; uniform float uFogNear; uniform float uFogFar; uniform float uFogFloor;
+        uniform float uMistK;
         ${SKY_GLSL}`
       )
       .replace(
         '#include <fog_fragment>',
-        `float fogF = 0.0;
-        #ifdef USE_FOG
-          fogF = mix(uFogFloor, 0.94, smoothstep(uFogNear, uFogFar, vFogDepth));
-        #endif
-        vec3 skyc = skyAt(gl_FragCoord.xy / uRes);
+        `float dk = clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);
+        float fogF = min(0.88, (uFogFloor * 2.2 + 0.2) * pow(dk, 1.6)) * uMistK;
+        float hazeTop = uMistLow + (uMistHigh - uMistLow) * dk;
+        float mistF = (1.0 - smoothstep(uMistLow - 0.2, hazeTop, vMistW.y)) * smoothstep(0.3, 0.6, dk);
+        // The ground mist takes the colour of the sky right behind (so gaps
+        // and feet vanish into it); the haze on a whole row takes the colour
+        // of the air lower down, nearer the horizon, so far rows turn pale.
+        vec2 suv = gl_FragCoord.xy / uRes;
+        vec3 skyc = skyAt(suv);
+        vec3 airc = skyAt(vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
         #ifdef TONE_MAPPING
           skyc = toneMapping(skyc);
+          airc = toneMapping(airc);
         #endif
         skyc = linearToOutputTexel(vec4(skyc, 1.0)).rgb;
-        float mistF = 1.0 - smoothstep(uMistLow, uMistHigh, vMistY);
-        gl_FragColor.rgb = mix(gl_FragColor.rgb, skyc, clamp(max(fogF, mistF), 0.0, 1.0));`
+        airc = linearToOutputTexel(vec4(airc, 1.0)).rgb;
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, airc, clamp(fogF, 0.0, 1.0));
+        gl_FragColor.rgb = mix(gl_FragColor.rgb, skyc, clamp(mistF, 0.0, 1.0));`
       );
   };
-  m.customProgramCacheKey = () => 'mist2';
+  m.customProgramCacheKey = () => 'mist3';
   return m;
 }
 
@@ -142,7 +159,9 @@ export function cyl(rt, rb, h, color, o = {}) {
 }
 
 export function sphere(r, color, o = {}) {
-  const ws = o.ws ?? 16, hs = o.hs ?? 12;
+  // Tiny spheres (flowers, knobs, buttons) are a few pixels across: fewer facets.
+  const small = r < 0.1;
+  const ws = o.ws ?? (small ? 8 : 16), hs = o.hs ?? (small ? 6 : 12);
   const geo = cachedGeo(`s${r},${ws},${hs}`, () => new THREE.SphereGeometry(r, ws, hs));
   const m = new THREE.Mesh(geo, o.mat || mat(color, o.m));
   m.position.set(o.x || 0, o.y || 0, o.z || 0);
@@ -297,7 +316,7 @@ export function windowTex(variant = 0) {
     const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
     for (let y = 0; y < 4; y++) {
       for (let x = 0; x < 4; x++) {
-        const lit = r() < 0.45;
+        const lit = r() < 0.45 - (variant % 4) * 0.06;
         ctx.fillStyle = lit ? '#ffd9a0' : '#3a4050';
         ctx.fillRect(x * 16 + 4, y * 16 + 4, 8, 9);
       }
@@ -313,31 +332,12 @@ export function emissiveWindowTex(variant = 0) {
     const r = () => ((s = (s * 16807) % 2147483647) / 2147483647);
     for (let y = 0; y < 4; y++) {
       for (let x = 0; x < 4; x++) {
-        const lit = r() < 0.45;
+        const lit = r() < 0.45 - (variant % 4) * 0.06;
         ctx.fillStyle = lit ? '#ffcf8a' : '#000';
         ctx.fillRect(x * 16 + 4, y * 16 + 4, 8, 9);
       }
     }
   }, { repeat: [1, 1] });
-}
-
-// Box geometry whose UVs repeat with world size so a window texture tiles evenly.
-export function tiledBoxGeo(w, h, d, unit = 1.6) {
-  return cachedGeo(`tb${w},${h},${d},${unit}`, () => {
-    const g = new THREE.BoxGeometry(w, h, d);
-    const uv = g.attributes.uv;
-    const n = g.attributes.normal;
-    for (let i = 0; i < uv.count; i++) {
-      const nx = Math.abs(n.getX(i)), ny = Math.abs(n.getY(i));
-      let su = 1, sv = 1;
-      if (nx > 0.5) { su = d / unit; sv = h / unit; }
-      else if (ny > 0.5) { su = 0; sv = 0; }
-      else { su = w / unit; sv = h / unit; }
-      uv.setXY(i, uv.getX(i) * su, uv.getY(i) * sv);
-    }
-    g.translate(0, h / 2, 0);
-    return g;
-  });
 }
 
 export { THREE };

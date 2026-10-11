@@ -11,6 +11,7 @@ export const G = {
   wind: 0,
   weather: 'none',
   reducedMotion: false,
+  skyHalfW: 21.6, // half the width of the sky layer currently in view (sky.js units)
 };
 
 // The sky gradient. Shared with the city's materials so that distant things can
@@ -25,22 +26,27 @@ export const skyUniforms = {
   uGlowSize: { value: 0.2 },
   uGlowStrength: { value: 0 },
   uAspect: { value: 1 },
+  // Screen height (0..1) of the foot of the city: the sky's gradient starts
+  // there, so its warm bottom colour sits on the skyline, not under the street.
+  uHorizon: { value: 0 },
 };
 
 // Shared uniforms for the "mist" that hides the bottoms of distant buildings.
 export const mistUniforms = {
   ...skyUniforms,
   uMist: { value: new THREE.Color('#c9b8a8') },
-  uMistLow: { value: -7.0 },
-  uMistHigh: { value: -3.0 },
+  uMistLow: { value: 0.0 }, // ground level
+  uMistHigh: { value: 3.2 }, // how high the ground mist reaches at the back
   uRes: { value: new THREE.Vector2(1, 1) },
-  uFogNear: { value: 160 },
-  uFogFar: { value: 200 },
+  // World z where the haze begins (just past the back gardens) and where it is total.
+  uFogNear: { value: -14 },
+  uFogFar: { value: -40 },
   uFogFloor: { value: 0.4 },
 };
 
 export const SKY_GLSL = /* glsl */ `
 vec3 skyAt(vec2 uv) {
+  uv.y = clamp((uv.y - uHorizon) / (1.0 - uHorizon), 0.0, 1.0);
   float y = uv.y;
   vec3 c = y < uMidPos
     ? mix(uBottom, uMid, smoothstep(0.0, uMidPos, y))
@@ -67,6 +73,7 @@ uniform vec2 uGlowPos;
 uniform float uGlowSize;
 uniform float uGlowStrength;
 uniform float uAspect;
+uniform float uHorizon;
 varying vec2 vUv;
 ${SKY_GLSL}
 void main() {
@@ -77,6 +84,26 @@ void main() {
   #include <tonemapping_fragment>
   #include <colorspace_fragment>
 }`;
+
+// The default camera. Dev builds take ?az=&el= (degrees) and ?fr= (frustum
+// height, in world units; an orthographic camera has no field of view) to
+// try other angles quickly. The city is laid out for the defaults.
+const DEG = Math.PI / 180;
+// Tall (portrait) screens look from a little higher: the house is small
+// there, and the city rows spread up the extra height.
+export const VIEW_DEFAULT = { az: 16 * DEG, el: 17 * DEG, elTall: 24 * DEG, frustum: 25, fitW: 24.5 };
+export const VIEW = { ...VIEW_DEFAULT };
+{
+  const q = new URLSearchParams(location.search);
+  const dev = !!(import.meta.env && import.meta.env.DEV) || q.has('debug');
+  const num = (k) => (q.has(k) && Number.isFinite(Number(q.get(k))) ? Number(q.get(k)) : null);
+  if (dev) {
+    if (num('az') != null) VIEW.az = num('az') * DEG;
+    if (num('el') != null) VIEW.el = VIEW.elTall = num('el') * DEG;
+    if (num('fr') != null) VIEW.frustum = num('fr');
+    if (num('fov') != null) VIEW.frustum = num('fov');
+  }
+}
 
 export class Stage {
   constructor(canvas) {
@@ -100,12 +127,19 @@ export class Stage {
     this.scene.fog = new THREE.Fog(0xffffff, 130, 220);
 
     this.camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 1, 600);
+    // A near-frontal view across the street, like a paper theatre: the camera
+    // stands a little to the right (so the room's left wall still reads) and
+    // only a little above, so the city rises in layers behind the house.
     this.view = {
-      az: Math.PI / 4,
-      el: 0.6,
-      dist: 160,
-      target: new THREE.Vector3(0.6, 2.2, -2.0),
-      frustum: 22,
+      az: VIEW.az,
+      el: VIEW.el,
+      elWide: VIEW.el,
+      elTall: VIEW.elTall,
+      dist: 300, // far enough back that the ground in front of the street (tall frames, pull-backs) is never clipped
+      target: new THREE.Vector3(3.3, 2.0, -1.0),
+      frustum: VIEW.frustum,
+      fitW: VIEW.fitW, // world units that must fit across on narrow screens
+      street: new THREE.Vector3(3.6, 0, 8.6), // front edge of the street, kept near the bottom of the frame
     };
     // Things the player (or the story) can nudge.
     this.cam = {
@@ -256,6 +290,8 @@ export class Stage {
     this.renderer.setSize(w, h, false);
     this.width = w;
     this.height = h;
+    const v = this.view;
+    v.el = v.elWide + (v.elTall - v.elWide) * clamp((1.0 - w / h) / 0.5, 0, 1);
     this.skyUniforms.uAspect.value = w / h;
     this.renderer.getDrawingBufferSize(mistUniforms.uRes.value);
   }
@@ -317,11 +353,40 @@ export class Stage {
     this.cam.panYT = 0;
   }
 
-  frustumH() {
+  // Frame height before any zoom: on narrow screens the house, garden and
+  // next door still fit across, and the extra height goes to the sky.
+  frustumBase() {
     const aspect = this.width / this.height;
-    // On narrow screens make sure the whole diorama still fits horizontally.
-    const base = Math.max(this.view.frustum, 27 / aspect);
-    return base / (this.cam.zoom * this.cam.extraZoom);
+    return Math.max(this.view.frustum, this.view.fitW / aspect);
+  }
+
+  frustumH() {
+    return this.frustumBase() / (this.cam.zoom * this.cam.extraZoom);
+  }
+
+  // Where the middle of the frame sits above the target: the front of the
+  // street stays near the bottom (higher on phones, where the controls take
+  // more room) and the rest of the frame is city and sky. Story pull-backs
+  // (extraZoom) keep the street where it is and open up more sky; the
+  // player's own zoom pivots on the middle of the view.
+  frameOffsetY() {
+    const fb = this.frustumBase() / this.cam.extraZoom;
+    const v = this.view;
+    const up = (this._camUp ||= new THREE.Vector3());
+    const drop = (this._tmpV ||= new THREE.Vector3()).copy(v.target).sub(v.street).dot(up);
+    const aspect = this.width / this.height;
+    // (the timeline bar along the bottom is ~80px tall, which is a lot of a short screen)
+    const f = Math.max(0.075 + 0.13 * clamp((1.2 - aspect) / 0.6, 0, 1), Math.min(0.24, 80 / this.height));
+    return fb / 2 - drop - f * fb;
+  }
+
+  // The vertical shift (as a share of the frame) that brings the target to
+  // `frac` of the way down the screen: used to lift the house above the
+  // phone's bottom sheet.
+  sheetShift(frac) {
+    const fb = this.frustumBase();
+    const atNow = 0.5 + this.frameOffsetY() / fb;
+    return frac - atNow;
   }
 
   _updateCamera(dt) {
@@ -344,24 +409,29 @@ export class Stage {
     cam.position.copy(v.target).addScaledVector(dir, v.dist);
     cam.lookAt(v.target);
     cam.updateMatrixWorld();
+    (this._camUp ||= new THREE.Vector3()).set(0, 1, 0).applyQuaternion(cam.quaternion);
 
     const aspect = this.width / this.height;
     const fh = this.frustumH();
     const fw = fh * aspect;
     const sx = c.panX + c.shift * fw;
-    const sy = c.panY + c.extraPanY + c.shiftY * fh;
+    const sy = c.panY + c.extraPanY + c.shiftY * fh + this.frameOffsetY();
     cam.left = -fw / 2 + sx;
     cam.right = fw / 2 + sx;
     cam.top = fh / 2 + sy;
     cam.bottom = -fh / 2 + sy;
-    cam.near = v.dist - 80;
+    cam.near = v.dist - 220;
     cam.far = v.dist + 260;
     cam.updateProjectionMatrix();
 
-    this.scene.fog.near = v.dist + 25;
-    this.scene.fog.far = v.dist + 140;
-    mistUniforms.uFogNear.value = v.dist + 6;
-    mistUniforms.uFogFar.value = v.dist + 46;
+    // The sky's gradient starts at the foot of the city.
+    const hz = (this._hz ||= new THREE.Vector3()).set(v.target.x, 0, -30).project(cam);
+    this.skyUniforms.uHorizon.value = clamp(hz.y * 0.5 + 0.5 - 0.04, 0, 0.75);
+
+    // Ordinary fog (sprites, lines) roughly follows the mist on the city.
+    const back = v.dist + (v.target.z + 6.6) * Math.cos(el);
+    this.scene.fog.near = back + 14;
+    this.scene.fog.far = back + 70;
 
     // Keep the sun's shadow frustum centred on the diorama.
     const sd = this._sunDir;

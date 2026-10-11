@@ -6,6 +6,12 @@ import { puffTex } from './city.js';
 
 // Things in the sky live on a layer glued to the back of the camera, in
 // screen-ish units: y in [-13.5, 13.5], x in [-13.5 * aspect, 13.5 * aspect].
+// Positions are designed for a landscape screen; on narrow ones, fitX pulls
+// things in from beyond the edges so the moon is still in the sky.
+export function fitX(x, margin = 2) {
+  const lim = Math.max(0, G.skyHalfW - margin);
+  return Math.max(-lim, Math.min(lim, x));
+}
 
 function dotTex() {
   if (dotTex.t) return dotTex.t;
@@ -69,6 +75,7 @@ export function moon(p = {}) {
     }
   }
   g.position.set(p.x ?? -14, p.y ?? 9, 0);
+  g.userData.tick = () => { g.position.x = fitX(p.x ?? -14, 2.5); };
   if (p.day) {
     m.transparent = true;
     m.opacity = 0.5;
@@ -187,7 +194,7 @@ export function launches(p = {}) {
     if (next <= 0) {
       const L = pool[idx++ % pool.length];
       L.t = 0;
-      L.x = p.x != null ? p.x + (r() - 0.5) * 6 : 6 + r() * 18;
+      L.x = fitX(p.x != null ? p.x + (r() - 0.5) * 6 : 6 + r() * 18, 1.5);
       L.bend = 0.05 + r() * 0.12;
       L.item.position.set(L.x, p.y0 ?? -1, 0);
       next = every * (0.6 + r() * 0.8);
@@ -237,6 +244,7 @@ export function flare(p = {}) {
   g.userData.setOpen(open);
   g.userData.tick = (dt, t) => {
     s.material.opacity = 0.85 + Math.sin(t * 3) * 0.1;
+    g.position.x = fitX(p.x ?? 10, 2.5);
   };
   return g;
 }

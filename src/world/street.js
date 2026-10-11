@@ -7,13 +7,21 @@ import { rng } from '../engine/tween.js';
 
 // The street along the front of the diorama, and Tomasz's house next door.
 // Street runs along x; pavement z[3.4,4.6], road z[4.6,7.6], verge z[7.6,8.4].
+// It carries on well past both edges of the view: long strips span LX0..LX1,
+// and the small details (paving joints, dashes, flowers) span DX0..DX1.
 
 const X0 = -8.6, X1 = 16.4;
+const LITE = QUALITY.lite;
+const LX0 = -90, LX1 = 110;
+const DX0 = LITE ? -30 : -44, DX1 = LITE ? 44 : 60;
 
 function wheel(r, w, color, x, z, y) {
   return cyl(r, r, w, color, { x, y: y - w / 2, z, rx: Math.PI / 2 });
 }
-const W = X1 - X0, CX = (X0 + X1) / 2;
+const W = LX1 - LX0, CX = (LX0 + LX1) / 2;
+const DW = DX1 - DX0;
+// Detail density outside the plot is lower, and lower again on phones.
+const sparse = (x) => x < X0 - 2 || x > X1 + 2;
 
 export function street(p = {}) {
   const g = new THREE.Group();
@@ -23,16 +31,16 @@ export function street(p = {}) {
   // Pavement
   if (kind !== 'meadow') {
     g.add(box(W, 0.1, 1.2, snow ? '#eef2f4' : '#b9b4ab', { x: CX, z: 4.0, cast: false }));
-    for (let x = X0 + 0.6; x < X1; x += 0.9) g.add(box(0.012, 0.101, 1.2, '#a39e95', { x, z: 4.0, cast: false }));
+    for (let x = DX0 + 0.6; x < DX1; x += 0.9) g.add(box(0.012, 0.101, 1.2, '#a39e95', { x, z: 4.0, cast: false }));
     g.add(box(W, 0.12, 0.12, '#d6d2ca', { x: CX, z: 4.62, cast: false }));
   }
   if (kind === 'road' || kind === 'snow' || kind === 'dug') {
     g.add(box(W, 0.05, 3.0, snow ? '#4a4d52' : '#55585e', { x: CX, z: 6.1, cast: false }));
-    for (let x = X0 + 0.4; x < X1; x += 2.2) g.add(box(1.1, 0.052, 0.1, '#e8e4d8', { x: x + 0.55, z: 6.1, cast: false }));
+    for (let x = DX0 + 0.4; x < DX1; x += 2.2) g.add(box(1.1, 0.052, 0.1, '#e8e4d8', { x: x + 0.55, z: 6.1, cast: false }));
     g.add(box(W, 0.12, 0.12, '#d6d2ca', { x: CX, z: 7.6, cast: false }));
     g.add(box(W, 0.07, 0.8, snow ? '#f1f4f6' : '#7fa55a', { x: CX, z: 8.0, cast: false }));
     if (snow) {
-      for (let i = 0; i < 12; i++) g.add(ico(0.2 + r() * 0.2, '#ffffff', { x: X0 + r() * W, y: 0.08, z: 4.65 + r() * 0.2, sy: 0.4 }));
+      for (let i = 0; i < (LITE ? 24 : 40); i++) g.add(ico(0.2 + r() * 0.2, '#ffffff', { x: DX0 + r() * DW, y: 0.08, z: 4.65 + r() * 0.2, sy: 0.4 }));
     }
     if (kind === 'dug') {
       // A trench along the road for the new cables, a strip of fresh earth.
@@ -54,30 +62,35 @@ export function street(p = {}) {
     g.add(box(W, 0.12, 0.12, '#d6d2ca', { x: CX, z: 7.6, cast: false }));
     g.add(box(W, 0.07, 0.8, '#7fa55a', { x: CX, z: 8.0, cast: false }));
     g.add(box(W, 0.06, 1.4, '#6d4f3a', { x: CX, z: 5.3, cast: false }));
-    for (let x = X0 + 0.6; x < X1; x += 0.5) g.add(ico(0.12 + r() * 0.1, ['#6fae4a', '#8fc45a', '#5f9a42'][Math.floor(r() * 3)], { x, y: 0.1, z: 4.9 + r() * 1.0, sy: 0.7 }));
+    for (let x = DX0 + 0.6; x < DX1; x += sparse(x) ? (LITE ? 1.4 : 0.9) : 0.5) g.add(ico(0.12 + r() * 0.1, ['#6fae4a', '#8fc45a', '#5f9a42'][Math.floor(r() * 3)], { x, y: 0.1, z: 4.9 + r() * 1.0, sy: 0.7 }));
   } else if (kind === 'green' || kind === 'meadow') {
     // The road is gone: a greenway with a winding path.
     const lush = kind === 'meadow';
     g.add(box(W, 0.06, lush ? 5.0 : 3.8, lush ? '#6fae5a' : '#86b05e', { x: CX, z: lush ? 5.9 : 6.3, cast: false }));
-    for (let x = X0; x < X1; x += 0.6) {
+    for (let x = DX0; x < DX1; x += 0.6) {
       const z = 5.9 + Math.sin(x * 0.35) * 0.6;
       g.add(box(0.62, 0.065, 0.9, '#d8cfb8', { x: x + 0.3, z, ry: Math.cos(x * 0.35) * 0.2, cast: false }));
     }
-    const nf = lush ? 140 : 50;
-    for (let i = 0; i < nf; i++) {
-      const x = X0 + 0.3 + r() * (W - 0.6), z = 4.0 + r() * 4.2;
-      if (Math.abs(z - (5.9 + Math.sin(x * 0.35) * 0.6)) < 0.6) continue;
-      const fc = ['#f2e6a0', '#f4a9c0', '#ffffff', '#c9a0f0', '#f2c230', '#e0483a'][Math.floor(r() * 6)];
-      g.add(sphere(lush ? 0.06 : 0.05, fc, { x, y: 0.12, z, cast: false, ws: 6, hs: 4 }));
+    // Flowers: as dense as before along the plot, thinner further along.
+    const PW = X1 - X0;
+    const strips = [[X0, X1, lush ? 140 : 50], [DX0, X0, (lush ? 140 : 50) * ((X0 - DX0) / PW) * (LITE ? 0.25 : 0.45)], [X1, DX1, (lush ? 140 : 50) * ((DX1 - X1) / PW) * (LITE ? 0.25 : 0.45)]];
+    for (const [a, c, nf] of strips) {
+      for (let i = 0; i < nf; i++) {
+        const x = a + 0.3 + r() * (c - a - 0.6), z = 4.0 + r() * 4.2;
+        if (Math.abs(z - (5.9 + Math.sin(x * 0.35) * 0.6)) < 0.6) continue;
+        const fc = ['#f2e6a0', '#f4a9c0', '#ffffff', '#c9a0f0', '#f2c230', '#e0483a'][Math.floor(r() * 6)];
+        g.add(ico(lush ? 0.07 : 0.06, fc, { x, y: 0.12, z, cast: false }));
+      }
     }
-    for (let i = 0; i < (lush ? 40 : 20); i++) {
-      const x = X0 + 0.3 + r() * (W - 0.6), z = 4.0 + r() * 4.2;
+    const nb = (lush ? 40 : 20) * (DW / PW) * (LITE ? 0.35 : 0.6);
+    for (let i = 0; i < nb; i++) {
+      const x = DX0 + 0.3 + r() * (DW - 0.6), z = 4.0 + r() * 4.2;
       if (Math.abs(z - (5.9 + Math.sin(x * 0.35) * 0.6)) < 0.7) continue;
       g.add(ico(0.18 + r() * 0.2, ['#5f9a42', '#7fae4a', '#4f8a3c'][i % 3], { x, y: 0.1, z, sy: 0.7 }));
     }
     if (lush) {
       // a little stream
-      for (let x = X0; x < X1; x += 0.8) g.add(box(0.85, 0.07, 0.35, '#7fc4d8', { x: x + 0.4, z: 7.6 + Math.sin(x * 0.5) * 0.2, cast: false, m: { rough: 0.15 } }));
+      for (let x = DX0; x < DX1; x += 0.8) g.add(box(0.85, 0.07, 0.35, '#7fc4d8', { x: x + 0.4, z: 7.6 + Math.sin(x * 0.5) * 0.2, cast: false, m: { rough: 0.15 } }));
     }
   }
   return g;
@@ -87,15 +100,29 @@ export function streetTrees(p = {}) {
   const g = new THREE.Group();
   const r = rng(52);
   const big = p.size === 'big';
-  const xs = p.xs || [-6.5, -2.8, 3.6, 7.8, 12.4];
+  const near = p.xs || [-6.5, -2.8, 3.6, 7.8, 12.4];
+  // The trees carry on along the street beyond the plot.
+  const along = LITE ? [-24, -16, 20, 28, 36] : [-38, -31, -24, -16, 20, 28, 36, 44, 52];
+  // Keep the view into the room clear: seen from the camera, trees on the
+  // verge between x -6.6 and 2.6 stand in front of it, so they move aside
+  // (and drop out if that crowds a neighbour).
+  const clear = [];
+  for (const x0 of near) {
+    const x = x0 > -6.8 && x0 < 2.8 ? (x0 < -2 ? -7.0 : 3.4) : x0;
+    if (clear.every((c) => Math.abs(c - x) > 1.6)) clear.push(x);
+  }
+  const xs = [...clear, ...along.map((x) => x + (near.length > 5 ? 1.7 : 0))];
   for (const x of xs) {
     const z = 7.9 + (r() - 0.5) * 0.4;
-    const h = big ? 2.2 + r() * 0.6 : 1.1;
+    // Big trees right in front of the plot stay a little lower, so their
+    // crowns don't hide the people in the room and the garden behind.
+    const k = big && x > X0 - 1 && x < X1 + 1 ? 0.72 : 1;
+    const h = (big ? 2.2 + r() * 0.6 : 1.1) * k;
     g.add(cyl(big ? 0.13 : 0.05, big ? 0.17 : 0.07, h, '#6b4a34', { x, z, seg: 6 }));
     const cols = p.autumn ? ['#d9822b', '#e6a53a', '#c4562c'] : ['#5f8f45', '#6fa04f', '#7fb05a'];
     const n = big ? 6 : 3;
     for (let i = 0; i < n; i++) {
-      g.add(ico((big ? 0.6 : 0.32) + r() * 0.2, cols[i % 3], { x: x + (r() - 0.5) * (big ? 1 : 0.4), y: h + (r() - 0.2) * (big ? 0.9 : 0.4), z: z + (r() - 0.5) * (big ? 1 : 0.4) }));
+      g.add(ico(((big ? 0.6 : 0.32) + r() * 0.2) * (k < 1 ? 0.85 : 1), cols[i % 3], { x: x + (r() - 0.5) * (big ? 1 : 0.4) * k, y: h + (r() - 0.2) * (big ? 0.9 : 0.4) * k, z: z + (r() - 0.5) * (big ? 1 : 0.4) }));
     }
     if (!big) g.add(cyl(0.015, 0.015, 1.0, '#c8b48a', { x: x + 0.12, z }));
   }
@@ -104,8 +131,17 @@ export function streetTrees(p = {}) {
 
 export function lampPosts(p = {}) {
   const g = new THREE.Group();
-  const lamps = [];
-  for (const x of p.xs || [-4.0, 6.0, 15.4]) {
+  // Every bulb and every pool of light shares one material, so the whole row
+  // merges into a few draws however long the street is.
+  const bulbMat = stdMat({ color: '#fff1d0', emissive: p.style === 'new' ? '#e8f4ff' : '#ffb35a', emissiveIntensity: 0 });
+  const poolMat = new THREE.MeshBasicMaterial({
+    map: poolTex(), color: p.style === 'new' ? '#dfeaff' : '#ffb060', transparent: true, opacity: 0,
+    depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+  });
+  const lamps = [{ bulbMat, poolMat }];
+  // (None stands right in front of the room.)
+  const xs = p.xs || (LITE ? [-24.0, -15.0, -7.4, 6.0, 15.4, 25.4, 35.4] : [-34.0, -24.0, -15.0, -7.4, 6.0, 15.4, 25.4, 35.4, 45.4]);
+  for (const x of xs) {
     const l = new THREE.Group();
     l.position.set(x, 0.1, 3.65);
     if (p.style === 'new') {
@@ -117,7 +153,6 @@ export function lampPosts(p = {}) {
       l.add(box(0.06, 0.06, 0.5, '#3a3d40', { y: 3.15, z: 0.25 }));
       l.add(box(0.18, 0.1, 0.3, '#3a3d40', { y: 3.05, z: 0.5 }));
     }
-    const bulbMat = stdMat({ color: '#fff1d0', emissive: p.style === 'new' ? '#e8f4ff' : '#ffb35a', emissiveIntensity: 0 });
     const bulb = p.style === 'new'
       ? box(0.42, 0.02, 0.1, '', { mat: bulbMat, y: 2.97, x: 0.2, cast: false })
       : box(0.14, 0.04, 0.24, '', { mat: bulbMat, y: 3.01, z: 0.5, cast: false });
@@ -125,17 +160,11 @@ export function lampPosts(p = {}) {
     // A pool of light on the ground instead of a real point light: every point
     // light makes every lit shader heavier, and changing their number between
     // visits forces every shader to recompile.
-    const poolMat = new THREE.MeshBasicMaterial({
-      map: poolTex(), color: p.style === 'new' ? '#dfeaff' : '#ffb060', transparent: true, opacity: 0,
-      depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
-    });
     const pool = new THREE.Mesh(new THREE.CircleGeometry(2.3, 28), poolMat);
     pool.rotation.x = -Math.PI / 2;
     pool.position.set(0, 0.03, p.style === 'new' ? 0.2 : 0.5);
     pool.renderOrder = 2;
     l.add(pool);
-    const pl = null;
-    lamps.push({ bulbMat, pl, poolMat });
     g.add(l);
   }
   g.userData.tick = () => {
@@ -235,13 +264,15 @@ export function robotaxi(p = {}) {
   const lane = p.lane ?? 5.4;
   const dir = p.dir ?? 1;
   const speed = p.speed ?? 3.2;
-  const period = (X1 - X0 + 8) / speed + (p.pause ?? 4);
+  // It drives the street past the house, appearing and vanishing out of view.
+  const A = -24, B = 32;
+  const period = (B - A + 8) / speed + (p.pause ?? 4);
   const offset = p.offset ?? 0;
   g.userData.tick = (dt, t) => {
     const tt = ((t + offset) % period) * speed;
-    let x = dir > 0 ? X0 - 3 + tt : X1 + 3 - tt;
-    const inside = x > X0 + 1 && x < X1 - 1;
-    const edge = Math.min(x - X0, X1 - x);
+    let x = dir > 0 ? A - 3 + tt : B + 3 - tt;
+    const inside = x > A + 1 && x < B - 1;
+    const edge = Math.min(x - A, B - x);
     const s = inside ? Math.min(1, (edge - 1) / 1.2) : 0;
     g.visible = s > 0.01;
     body.scale.setScalar(Math.max(0.001, s));
@@ -375,7 +406,7 @@ export function tomaszSign(p = {}) {
 }
 
 export function tomaszBanner(p = {}) {
-  const t = textTex('tbanner', ['PEOPLE NOT PROGRAMS'], { w: 1024, h: 192, bg: '#fbf8ee', fg: '#b8312f', font: '900 104px "Inter", Arial, sans-serif', border: '#b8312f' });
+  const t = textTex('tbanner', ['PEOPLE NOT PROGRAMS'], { w: 1024, h: 192, bg: '#fbf8ee', fg: '#b8312f', font: '900 88px "Inter", Arial, sans-serif', border: '#b8312f' });
   const g = new THREE.Group();
   const b = card(3.6, 0.68, t, { x: 12.9, y: 0.5, z: 3.36, m: {} });
   g.add(b);

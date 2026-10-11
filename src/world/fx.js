@@ -8,10 +8,13 @@ const LITE = QUALITY.lite ? 0.45 : 1;
 
 // Weather and small living details.
 
-const AREA = { x0: -9, x1: 17, z0: -7, z1: 9 };
+// Weather falls over the whole view, not just the plot: the street runs on
+// past both edges and the allotments behind.
+const AREA = { x0: -22, x1: 30, z0: -12, z1: 10 };
+const SPREAD = 1.7; // how much more ground that is than the plot alone
 
 export function rain(p = {}) {
-  const n = Math.round((p.n ?? 900) * LITE);
+  const n = Math.round((p.n ?? 900) * LITE * SPREAD);
   const pos = new Float32Array(n * 6);
   const r = rng(5);
   const drops = [];
@@ -40,12 +43,12 @@ export function rain(p = {}) {
 }
 
 function flakes(p, opts) {
-  const n = Math.round((p.n ?? opts.n) * LITE);
+  const n = Math.round((p.n ?? opts.n) * LITE * (opts.spread ?? SPREAD));
   const r = rng(opts.seed);
   const pos = new Float32Array(n * 3);
   const items = [];
   for (let i = 0; i < n; i++) {
-    items.push({ x: AREA.x0 + r() * (AREA.x1 - AREA.x0), y: r() * 12, z: AREA.z0 + r() * (AREA.z1 - AREA.z0), s: opts.speed * (0.6 + r() * 0.8), ph: r() * 6 });
+    items.push({ x: AREA.x0 + r() * (AREA.x1 - AREA.x0), y: r() * (opts.top ?? 12), z: AREA.z0 + r() * (AREA.z1 - AREA.z0), s: opts.speed * (0.6 + r() * 0.8), ph: r() * 6 });
   }
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
@@ -71,7 +74,7 @@ function flakes(p, opts) {
         f.y += Math.sin(t * 0.7 + f.ph) * dt * 0.4 + f.s * dt;
         if (f.y > 4 || f.y < 0.2) f.s = -f.s;
       }
-      if (f.y < 0) { f.y = 11; f.x = AREA.x0 + r() * (AREA.x1 - AREA.x0); }
+      if (f.y < 0) { f.y = opts.top ?? 11; f.x = AREA.x0 + r() * (AREA.x1 - AREA.x0); }
       if (f.x > AREA.x1) f.x = AREA.x0;
       pos[i * 3] = f.x; pos[i * 3 + 1] = f.y; pos[i * 3 + 2] = f.z;
     }
@@ -81,8 +84,8 @@ function flakes(p, opts) {
   return g;
 }
 
-export const snowfall = (p = {}) => flakes(p, { n: 500, seed: 6, speed: 1.1, size: 4, color: '#ffffff', sway: 0.6 });
-export const motes = (p = {}) => flakes(p, { n: 70, seed: 7, speed: 0.15, size: 3.5, color: p.color || '#ffe6a0', sway: 0.4, float: true, additive: true, blink: true });
+export const snowfall = (p = {}) => flakes(p, { n: 500, seed: 6, speed: 1.1, size: 4, color: '#ffffff', sway: 0.6, top: 16 });
+export const motes = (p = {}) => flakes(p, { n: 70, seed: 7, speed: 0.15, size: 3.5, color: p.color || '#ffe6a0', sway: 0.4, float: true, additive: true, blink: true, spread: 1.3 });
 
 // Falling leaves (autumn) or petals (spring), as tiny tumbling cards.
 export function leaves(p = {}) {

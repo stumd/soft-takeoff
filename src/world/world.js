@@ -352,5 +352,6 @@ export class World {
     this.sky.quaternion.copy(q);
     this.sky.position.copy(cam.position).addScaledVector(fwd, st.view.dist + 200).addScaledVector(right, cx).addScaledVector(up, cy);
     this.sky.scale.setScalar((cam.top - cam.bottom) / 27);
+    G.skyHalfW = 13.5 * ((cam.right - cam.left) / (cam.top - cam.bottom));
   }
 }

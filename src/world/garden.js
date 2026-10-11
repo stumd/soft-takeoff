@@ -6,21 +6,13 @@ import { rng } from '../engine/tween.js';
 
 export const SLAB = { x0: -8.6, x1: 16.4, z0: -6.6, z1: 8.4 };
 
+// The plot itself: a thin plinth flush with the surrounding ground (see
+// surrounds.js), so the house sits in its street rather than floating.
 export function slab() {
   const g = new THREE.Group();
   const w = SLAB.x1 - SLAB.x0, d = SLAB.z1 - SLAB.z0;
   const cx = (SLAB.x0 + SLAB.x1) / 2, cz = (SLAB.z0 + SLAB.z1) / 2;
-  g.add(box(w, 0.5, d, '#5a4434', { x: cx, y: -0.5, z: cz, receive: true }));
-  g.add(box(w - 0.1, 0.9, d - 0.1, '#7d6a58', { x: cx, y: -1.4, z: cz }));
-  g.add(box(w - 0.3, 0.3, d - 0.3, '#6b5a4a', { x: cx, y: -1.7, z: cz }));
-  // a few stones in the soil band
-  const r = rng(5);
-  for (let i = 0; i < 26; i++) {
-    const onX = r() < 0.6;
-    const x = onX ? SLAB.x0 + r() * w : SLAB.x1 + 0.02;
-    const z = onX ? SLAB.z1 + 0.02 : SLAB.z0 + r() * d;
-    g.add(ico(0.08 + r() * 0.12, '#9a8a78', { x, y: -0.6 - r() * 1.0, z, sy: 0.6 }));
-  }
+  g.add(box(w, 0.3, d, '#5a4434', { x: cx, y: -0.3, z: cz, receive: true, cast: false }));
   return g;
 }
 

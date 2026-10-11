@@ -4,6 +4,7 @@ import * as street from './street.js';
 import * as city from './city.js';
 import * as sky from './sky.js';
 import * as fx from './fx.js';
+import { surrounds } from './surrounds.js';
 import { person, dog, robot, snowman } from './people.js';
 
 export const MODELS = {
@@ -40,6 +41,7 @@ export const MODELS = {
   bench: room.bench,
   // garden
   slab: garden.slab,
+  surrounds,
   lawn: garden.lawn,
   hedge: garden.hedge,
   fence: garden.fence,
@@ -110,4 +112,4 @@ export const MODELS = {
 export const SKY_MODELS = new Set(['stars', 'moon', 'clouds', 'swarm', 'ring', 'launches', 'flare']);
 // Big distant things rise out of the ground rather than popping in.
 export const RISE_MODELS = new Set(['city', 'cranes', 'meridian', 'datacentres', 'reactor', 'solarField', 'newTowers', 'factory', 'lattice', 'spindle', 'gardenCity', 'river']);
-export const FADE_MODELS = new Set(['rain', 'snowfall', 'motes', 'leaves', 'petals', 'birds', 'steam', ...SKY_MODELS]);
+export const FADE_MODELS = new Set(['surrounds', 'rain', 'snowfall', 'motes', 'leaves', 'petals', 'birds', 'steam', ...SKY_MODELS]);

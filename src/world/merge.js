@@ -9,7 +9,7 @@ export const MERGEABLE = new Set([
   'slab', 'floor', 'walls', 'kitchen', 'table', 'chair', 'bookshelf', 'lawn', 'hedge', 'fence', 'shed',
   'vegBed', 'street', 'streetTrees', 'tomaszHouse', 'tomaszVeg', 'gardenChairs', 'greenhouse', 'grave',
   'car', 'lorry', 'van', 'boxes', 'bench', 'sideTable', 'hospitalBed', 'dogBed', 'armchair', 'basket', 'ladder',
-  'oxygen', 'toolbag', 'telescope', 'paper', 'gnome', 'soldBoard', 'workers_static',
+  'oxygen', 'toolbag', 'telescope', 'paper', 'gnome', 'soldBoard', 'workers_static', 'lampPosts',
 ]);
 
 function normalise(geo, matrix) {
