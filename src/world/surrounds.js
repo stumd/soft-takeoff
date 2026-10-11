@@ -4,7 +4,7 @@ import { Batch } from './batch.js';
 import { G } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
-import { xAt, groundY } from './terrain.js';
+import { xAt, sxOf, groundY, HILL } from './terrain.js';
 
 // Everything around the plot, so the house sits in a street rather than on a
 // floating slab: the neighbours' houses along the street, the far side of the
@@ -31,14 +31,14 @@ let mats = null;
 function materials() {
   if (mats) return mats;
   const body = markCached(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  addMist(body);
+  addMist(body, 0.55);
   const dark = markCached(new THREE.MeshLambertMaterial({ color: '#2a3540' }));
   addMist(dark);
   const lit = markCached(new THREE.MeshLambertMaterial({ color: '#2a3540', emissive: '#ffc070', emissiveIntensity: 0 }));
   addMist(lit);
   // the far district: a silhouette against the sky behind it
   const hills = markCached(new THREE.MeshLambertMaterial({ vertexColors: true }));
-  addMist(hills, 1, 0.68, -21.4);
+  addMist(hills, 1, 0.6, -21.4);
   mats = { body, dark, lit, hills };
   return mats;
 }
@@ -64,6 +64,15 @@ const RIGHT = [
   { w: 6.2, wall: '#e6dcc6', roof: 'front', bay: true },
   { w: 6.6, wall: '#b06a48', roof: 'flat', storeys: 3 },
 ];
+
+// Is something of half-width hw at (x, z), behind the room as the default
+// camera sees it? (The room runs from x -8 to 0 with its back wall at z -6:
+// screen-x -6.0 to 1.7.) The allotment sheds there would stand on its back
+// wall's line, as if on its roof.
+function behindRoom(x, z, hw) {
+  const sx = sxOf(x, z);
+  return sx + hw > -6.6 && sx - hw < 2.3;
+}
 
 function plots() {
   const out = [];
@@ -207,23 +216,30 @@ function car(b, r, x, z, flip) {
 }
 
 // The land across the river, which the city stands on: flat along the bank,
-// then the long rise of the hill to its crest, beyond which it falls away.
+// then the long rise of the hill to its crest. (Beyond the crest it belongs
+// to the far district: see farDistrict().)
+const LAND_ZS = [-21.3, -24, -27.5, -29, -30.5, -32, -33.5, -35, -36.5, -38, -39.5, -41, HILL.crest];
+// (screen-x extent and grid step: the far land beyond the crest uses the same)
+const LAND = LITE ? { sx0: -40, sx1: 52, step: 6 } : { sx0: -60, sx1: 72, step: 3 };
 function land(b, t) {
-  // (pushed straight into the batch: its colour varies per vertex)
-  const SX0 = LITE ? -40 : -60, SX1 = LITE ? 52 : 72, step = LITE ? 6 : 3;
-  const zs = [-21.3, -24, -27.5, -29, -30.5, -32, -33.5, -35, -36.5, -38, -39.5, -41, -41.6, -43.5, -48];
+  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LAND_ZS, (z) => Math.min(1, Math.max(0, (-z - 25) / 12)), t.bank, t.hill));
+}
+
+// A strip of ground following the terrain, from screen-x SX0 to SX1, through
+// the rows zs; its colour goes from c0 to c1 by k(z), patchy along the way.
+// (In the same form as a batch's shapes: unindexed, blank uvs.)
+function landStrip(SX0, SX1, step, zs, k, c0, c1) {
   const cols = Math.round((SX1 - SX0) / step);
   const pos = [], col = [], idx = [];
-  const c = new THREE.Color(), cBank = new THREE.Color(t.bank), cHill = new THREE.Color(t.hill);
+  const c = new THREE.Color(), cA = new THREE.Color(c0), cB = new THREE.Color(c1);
   for (let j = 0; j < zs.length; j++) {
     const z = zs[j];
-    const k = Math.min(1, Math.max(0, (-z - 25) / 12));
     for (let i = 0; i <= cols; i++) {
       const sx = SX0 + i * step;
       pos.push(xAt(sx, z), groundY(sx, z), z);
       // patchy: lighter and darker ground in turn
       const v = 0.94 + 0.12 * Math.abs(Math.sin(sx * 0.37 + j * 1.7));
-      c.copy(cBank).lerp(cHill, k).multiplyScalar(v);
+      c.copy(cA).lerp(cB, k(z)).multiplyScalar(v);
       col.push(c.r, c.g, c.b);
     }
   }
@@ -231,7 +247,8 @@ function land(b, t) {
   for (let j = 0; j < zs.length - 1; j++) {
     for (let i = 0; i < cols; i++) {
       const a = j * n + i, b2 = a + 1, d = a + n, e = d + 1;
-      idx.push(a, d, b2, b2, d, e);
+      // (wound to face up, towards the camera)
+      idx.push(a, b2, d, b2, e, d);
     }
   }
   const g = new THREE.BufferGeometry();
@@ -239,22 +256,26 @@ function land(b, t) {
   g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
   g.setIndex(idx);
   g.computeVertexNormals();
-  // in the same form as the rest of the batch: unindexed, blank uvs
   const ng = g.toNonIndexed();
   g.dispose();
   ng.setAttribute('uv', new THREE.BufferAttribute(new Float32Array(ng.attributes.position.count * 2).fill(0.02), 2));
-  b.geos.push(ng);
+  return ng;
 }
 
-// Beyond the crest of the city's hill, the city carries on over the next
-// rise: a far district, cut out as one flat silhouette of roofs and towers
-// (taller towards its own centre), like the furthest flat of a paper theatre.
-// From a landscape screen it hides behind the crest; tall screens look from
-// higher up and see it rise above, so a phone's tall frame holds land, not
-// just sky. It takes most of its colour from the sky right behind it.
+// Beyond the crest of the city's hill, the land falls gently away for a long
+// way, and the city carries on at the bottom of it: a far district, cut out
+// as one flat silhouette of roofs and towers (taller towards its own centre),
+// like the furthest flat of a paper theatre. From a landscape screen both
+// hide behind the crest; tall screens and the story's pull-backs look from
+// higher up and see the land run back from the crest to the district, which
+// stands on it, so a phone's tall frame holds land, not just sky. Both take
+// most of their colour from the sky right behind them.
 function farDistrict(t) {
   const b = new Batch();
   const SX0 = LITE ? -46 : -76, SX1 = LITE ? 56 : 86, Z = -95;
+  // the land, first in the batch so it hides the foot of the district cheaply
+  // (on the same grid as the hill's, so they meet without a seam)
+  b.geos.push(landStrip(LAND.sx0, LAND.sx1, LAND.step, LITE ? [HILL.crest, Z - 0.3] : [HILL.crest, -52, -64, -78, Z - 0.3], (z) => Math.min(1, (HILL.crest - z) / 40), t.hill, t.ridge[1]));
   const r = rng(911);
   const steps = [];
   for (let sx = SX0; sx < SX1;) {
@@ -265,14 +286,15 @@ function farDistrict(t) {
     sx += w;
   }
   const hill = (sx) => -20.9 + 0.5 * Math.sin(sx * 0.05 + 1.3) + 0.3 * Math.sin(sx * 0.14);
+  // (its foot only just below the land in front of it)
   const shape = new THREE.Shape();
-  shape.moveTo(SX0, hill(SX0) - 14);
+  shape.moveTo(SX0, hill(SX0) - 1.6);
   for (const [a, w, h] of steps) {
     shape.lineTo(a, hill(a) + h);
     shape.lineTo(a + w, hill(a + w) + h);
   }
-  shape.lineTo(SX1, hill(SX1) - 14);
-  shape.lineTo(SX0, hill(SX0) - 14);
+  shape.lineTo(SX1, hill(SX1) - 1.6);
+  shape.lineTo(SX0, hill(SX0) - 1.6);
   const geo = new THREE.ShapeGeometry(shape);
   // shape x is screen-x: stand it along the row at depth Z
   const p = geo.attributes.position;
@@ -281,6 +303,45 @@ function farDistrict(t) {
   b.add(geo, t.ridge[0]);
   geo.dispose();
   return b.mesh(materials().hills);
+}
+
+// The green across the road (see surrounds()), from x0 to x1: along its
+// front a footpath, a low hedge, benches and flower beds; beyond a stretch of
+// lawn with a few shrubs, a row of trees. Only the low front shows (under the
+// bottom bar) in the usual view; the trees stand far enough back to come in
+// only as the story pulls the camera back and up. Its own random stream, so
+// the street's houses are unchanged.
+function green(b, t, x0, x1) {
+  const r = rng(4041);
+  const path = t.snow ? '#f2f5f7' : '#c4b89c';
+  const hedge = t.snow ? '#e8eef0' : t.hedge;
+  b.box(x1 - x0, 0.03, 0.9, path, (x0 + x1) / 2, 0, 14.65);
+  let x = x0;
+  while (x < x1) {
+    // a run of hedge, then a gap with a bench or a flower bed
+    const w = 4 + r() * 4;
+    b.box(w, 0.5 + r() * 0.15, 0.5, hedge, x + w / 2, 0, 15.6);
+    x += w;
+    const roll = r(), gap = 2.2 + r() * 1.4;
+    const cx = x + gap / 2;
+    if (roll < 0.5) {
+      // a bench facing the street
+      const wood = ['#7a5a3a', '#5a6a4a', '#6a4e3a'][Math.floor(r() * 3)];
+      b.box(1.4, 0.08, 0.45, wood, cx, 0.42, 15.25);
+      b.box(1.4, 0.4, 0.07, wood, cx, 0.5, 15.5);
+      for (const dx of [-0.6, 0.6]) b.box(0.08, 0.42, 0.4, '#3a3a3a', cx + dx, 0, 15.25);
+    } else if (!t.snow) {
+      b.box(gap - 0.6, 0.18, 0.9, '#6a4e38', cx, 0, 15.6);
+      const fl = t.flowers ? ['#f2c230', '#f4a9c0', '#ffffff'] : [t.crop, t.hedge];
+      for (let i = 0; i < 4; i++) b.ico(0.16, fl[i % fl.length], cx - (gap - 1) / 2 + (i / 3) * (gap - 1), 0.25, 15.6);
+    }
+    x += gap;
+    // a clipped bush or two on the lawn behind
+    if (r() < 0.5) b.ico(0.32 + r() * 0.1, hedge, x - gap - w * r(), 0.2, 18 + r() * 2.5, { sy: 0.8 });
+  }
+  // a second footpath, and a row of small trees along it
+  b.box(x1 - x0, 0.03, 0.9, path, (x0 + x1) / 2, 0, 22.6);
+  for (let tx = x0 + r() * 3; tx < x1; tx += 5 + r() * 3) tree(b, r, t, tx, 24.2 + r() * 1.2, 0.58 + r() * 0.1);
 }
 
 /**
@@ -305,9 +366,14 @@ export function surrounds(p = {}) {
   // piers, hedges, bins, front gardens.
   b.box(XR - XL, 0.1, 1.3, t.snow ? '#eef2f4' : '#b9b4ab', (XL + XR) / 2, 0, 9.05);
   b.box(XR - XL, 0.12, 0.12, '#d6d2ca', (XL + XR) / 2, 0, 8.42);
-  b.quad(XL, XR, 10.25, 60, t.snow ? '#e4eaee' : t.hedge, -0.03);
+  b.quad(XL, XR, 10.25, 60, t.snow ? '#e4eaee' : t.grass, -0.03);
   {
     const D0 = LITE ? -24 : -60, D1 = LITE ? 34 : 74;
+    // Beyond the front gardens, a green runs along the street: a footpath
+    // that the garden paths join, a low hedge, benches and a few trees. It is
+    // below the frame until the story pulls the camera back and up. (Not on
+    // the lite tier, whose phones keep subtitles over that part of the frame.)
+    if (!LITE) green(b, t, D0, D1);
     let x = D0;
     while (x < D1) {
       const w = 5.4 + r() * 1.6;
@@ -366,15 +432,20 @@ export function surrounds(p = {}) {
       if (roll < 0.35) {
         // a shed
         const sx = cx + 1.4 * (r() < 0.5 ? -1 : 1);
-        b.box(1.5, 1.4, 1.2, ['#7d5b3e', '#5f7a6a', '#8a7a5a', '#6a5a7a'][Math.floor(r() * 4)], sx, 0, z1 + 0.9);
-        b.roof(1.7, 0.4, 1.4, t.snow ? '#ffffff' : '#3b3f45', sx, 1.4, z1 + 0.9);
+        const col = ['#7d5b3e', '#5f7a6a', '#8a7a5a', '#6a5a7a'][Math.floor(r() * 4)];
+        if (!behindRoom(sx, z1 + 0.9, 0.9)) {
+          b.box(1.5, 1.4, 1.2, col, sx, 0, z1 + 0.9);
+          b.roof(1.7, 0.4, 1.4, t.snow ? '#ffffff' : '#3b3f45', sx, 1.4, z1 + 0.9);
+        }
       } else if (roll < 0.5) {
         // bean poles
-        for (let q = 0; q < 3; q++) b.cyl(0.03, 0.03, 1.8, '#a08a60', cx - 1 + q * 0.5, 0, z1 + 1.0, { seg: 4, rz: (q - 1) * 0.15 });
+        if (!behindRoom(cx - 0.5, z1 + 1.0, 0.8)) for (let q = 0; q < 3; q++) b.cyl(0.03, 0.03, 1.8, '#a08a60', cx - 1 + q * 0.5, 0, z1 + 1.0, { seg: 4, rz: (q - 1) * 0.15 });
       } else if (roll < 0.62 && !t.snow) {
         // a greenhouse
-        b.box(1.6, 1.2, 1.0, '#d8eef0', cx + 1.2, 0, z1 + 0.8);
-        b.roof(1.7, 0.35, 1.1, '#e8f4f4', cx + 1.2, 1.2, z1 + 0.8);
+        if (!behindRoom(cx + 1.2, z1 + 0.8, 0.9)) {
+          b.box(1.6, 1.2, 1.0, '#d8eef0', cx + 1.2, 0, z1 + 0.8);
+          b.roof(1.7, 0.35, 1.1, '#e8f4f4', cx + 1.2, 1.2, z1 + 0.8);
+        }
       }
       if (r() < 0.3) b.cyl(0.25, 0.25, 0.8, '#3a5a3a', cx - 2.2, 0, z0 - 0.4, { seg: 8 });
     }

@@ -74,10 +74,16 @@ const LIGHTS_NO_POINT = THREE.ShaderChunk.lights_fragment_begin.replace('#if ( N
 // Fade far-away things towards the colour of the air near the horizon, more
 // with each row back (by world z, so a row fades as a whole), and let a thin,
 // uneven ground mist lie on the land: it pools in places and thins in others,
-// drifts slowly, and takes the colour of the sky right behind, so it reads as
-// air rather than as a wall of fog. `k` scales the haze for one material;
-// `sil` instead makes it a silhouette against the sky right behind it (for
-// the furthest flats), melting fully into the sky below height `silY`.
+// and drifts slowly. The mist leans towards the colour of the air (not of the
+// sky right behind), and neither it nor the haze ever quite covers the
+// ground, so the land across the river still reads as land, paler with each
+// row back, and the city stands on it rather than floating in the sky.
+// `k` scales the haze for one material; `sil` instead makes it a silhouette
+// against the sky right behind it (for the furthest flats), melting fully into
+// the sky below height `silY`.
+//
+// On the lite tier the mist is even (no noise) and the sky is looked up once,
+// not twice: most of a phone's upper half runs this shader.
 export function addMist(m, k = 1, sil = 0, silY = 0) {
   m.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, mistUniforms);
@@ -108,6 +114,8 @@ export function addMist(m, k = 1, sil = 0, silY = 0) {
       .replace(
         '#include <common>',
         `#include <common>
+        ${QUALITY.lite ? '#define MIST_LITE' : ''}
+        #define MIST_WRAP 12800.0
         varying vec3 vMistW;
         uniform vec3 uTop; uniform vec3 uMid; uniform vec3 uBottom; uniform float uMidPos;
         uniform vec3 uGlowColor; uniform vec2 uGlowPos; uniform float uGlowSize; uniform float uGlowStrength; uniform float uAspect; uniform float uHorizon;
@@ -115,38 +123,64 @@ export function addMist(m, k = 1, sil = 0, silY = 0) {
         uniform float uMistK; uniform float uMistTime; uniform float uSil; uniform float uSilY;
         ${SKY_GLSL}
         ${GROUND_GLSL}
-        float mistHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+        #ifndef MIST_LITE
+        // A hash without sin() (whose precision falls apart on mobile GPUs as
+        // its argument grows), over a lattice that repeats every 64 cells, so
+        // the drift can wrap round (see MIST_WRAP) without a visible jump.
+        float mistHash(vec2 i) {
+          vec3 p3 = fract(vec3(mod(i, 64.0).xyx) * 0.1031);
+          p3 += dot(p3, p3.yzx + 33.33);
+          return fract((p3.x + p3.y) * p3.z);
+        }
         float mistNoise(vec2 p) {
           vec2 i = floor(p), f = fract(p);
           f = f * f * (3.0 - 2.0 * f);
           return mix(mix(mistHash(i), mistHash(i + vec2(1.0, 0.0)), f.x), mix(mistHash(i + vec2(0.0, 1.0)), mistHash(i + vec2(1.0, 1.0)), f.x), f.y);
-        }`
+        }
+        #endif`
       )
       .replace(
         '#include <fog_fragment>',
         `float dk = clamp((uFogNear - vMistW.z) / (uFogNear - uFogFar), 0.0, 1.0);
-        // aerial haze: a whole row turns paler, more with each row back
-        float fogF = min(0.9, (uFogFloor * 2.2 + 0.2) * pow(dk, 0.85)) * uMistK;
+        // aerial haze: a whole row turns paler, more with each row back, but
+        // never all the way to the colour of the air
+        float fogF = min(0.72, (uFogFloor * 2.2 + 0.2) * pow(dk, 0.85)) * uMistK;
         // ground mist: patchy along each row, deeper and denser further back
         // (nothing this side of the river, which is most of the screen)
         float mistF = 0.0;
         if (dk > 0.0 && vMistW.z > -70.0) {
-          float n = mistNoise(vec2(vMistW.x * 0.23 + uMistTime * 0.04, vMistW.z * 0.41 - uMistTime * 0.015));
+          #ifdef MIST_LITE
+            float n = 0.45;
+          #else
+            // the drift wraps after MIST_WRAP seconds, when it has moved a
+            // whole number of the noise's 64-cell repeats in both directions
+            float mt = mod(uMistTime, MIST_WRAP);
+            float n = mistNoise(vec2(vMistW.x * 0.23 + mt * 0.04, vMistW.z * 0.41 - mt * 0.015));
+          #endif
           float g = groundY(vMistW);
           float top = g + (uMistLow + uMistHigh * dk) * (0.4 + n);
           mistF = (1.0 - smoothstep(g - 0.05, top, vMistW.y)) * smoothstep(0.0, 0.45, dk) * (0.3 + 0.35 * dk + 0.5 * n) * min(1.0, uMistK);
+          // thick in places, but the ground always shows through a little
+          mistF = min(mistF, 0.5);
         }
         if (uSil > 0.0) mistF = max(mistF, mix(uSil, 1.0, 1.0 - smoothstep(uSilY - 3.5, uSilY, vMistW.y)));
         fogF *= 1.0 - uSil;
         float w = fogF * (1.0 - mistF) + mistF;
         if (w > 0.003) {
-          // The mist takes the colour of the sky right behind (so it reads as
-          // air), the haze the colour of the air nearer the horizon (so far
-          // rows turn pale). Mixed first, then tone-mapped once.
+          // The haze takes the colour of the air nearer the horizon (so far
+          // rows turn pale); the mist mostly that too, with a little of the sky
+          // right behind (so it reads as air, not as a wall of fog), and the
+          // silhouettes the sky right behind. Mixed first, then tone-mapped once.
           vec2 suv = gl_FragCoord.xy / uRes;
-          vec3 skyc = skyAt(suv);
-          vec3 airc = skyAt(vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
-          vec3 c = (airc * fogF * (1.0 - mistF) + skyc * mistF) / w;
+          #ifdef MIST_LITE
+            // (one look-up: a silhouette takes the sky behind, the rest the air)
+            vec3 airc = skyAt(uSil > 0.0 ? suv : vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
+            vec3 mistc = airc;
+          #else
+            vec3 airc = skyAt(vec2(suv.x, mix(uHorizon, suv.y, 0.35)));
+            vec3 mistc = mix(airc, skyAt(suv), uSil > 0.0 ? 1.0 : 0.3);
+          #endif
+          vec3 c = (airc * fogF * (1.0 - mistF) + mistc * mistF) / w;
           #ifdef TONE_MAPPING
             c = toneMapping(c);
           #endif
@@ -155,7 +189,7 @@ export function addMist(m, k = 1, sil = 0, silY = 0) {
         }`
       );
   };
-  m.customProgramCacheKey = () => 'mist4';
+  m.customProgramCacheKey = () => (QUALITY.lite ? 'mist5l' : 'mist5');
   return m;
 }
 
@@ -319,8 +353,9 @@ export function canvasTex(key, w, h, draw, opts = {}) {
   return t;
 }
 
-// Text on a sign/poster.
-export function textTex(key, lines, { w = 512, h = 256, bg = '#fff', fg = '#222', font = '600 64px "Fraunces", Georgia, serif', align = 'center', pad = 20, lineH = 1.1, border } = {}) {
+// Text on a sign/poster. `shift` moves the block of lines down (or up, if
+// negative) from the middle; `extra(ctx, w, h)` draws over the finished sign.
+export function textTex(key, lines, { w = 512, h = 256, bg = '#fff', fg = '#222', font = '600 64px "Fraunces", Georgia, serif', align = 'center', pad = 20, lineH = 1.1, border, shift = 0, extra } = {}) {
   const has = texCache.has('txt:' + key);
   const t = canvasTex('txt:' + key, w, h, (ctx) => {
     ctx.fillStyle = bg;
@@ -345,9 +380,10 @@ export function textTex(key, lines, { w = 512, h = 256, bg = '#fff', fg = '#222'
     }
     const total = lines.length * size * lineH;
     lines.forEach((ln, i) => {
-      const y = h / 2 - total / 2 + size * lineH * (i + 0.5);
+      const y = h / 2 + shift - total / 2 + size * lineH * (i + 0.5);
       ctx.fillText(ln, align === 'center' ? w / 2 : pad, y);
     });
+    if (extra) extra(ctx, w, h);
   });
   // Web fonts load lazily; draw the sign again once its font has arrived.
   if (!has && typeof document !== 'undefined' && document.fonts && !document.fonts.check(font)) {
