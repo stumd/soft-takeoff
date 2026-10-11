@@ -691,6 +691,7 @@ export class Stage {
     // (each part as a screen rect [x0, y0, x1, y1]; `main`: the first object,
     // which the marker stands on, and the marker)
     const parts = [], main = [];
+    let yMin = 0; // (a marker above the frame counts when it tops a part taken whole)
     for (const b of (focus && focus.boxes) || []) {
       const r = boxPx(b);
       const wholeY = r[1] < 0 && r[3] - r[1] <= free.bottom - top0;
@@ -701,9 +702,8 @@ export class Stage {
       const v = [whole ? r[0] : vx0, vy0, whole ? r[2] : vx1, vy1];
       parts.push(v);
       if (b === focus.boxes[0]) main.push(v);
+      if (wholeY) yMin = Math.min(yMin, r[1] - 30);
     }
-    // (a marker above the frame counts when it tops a part taken whole)
-    const yMin = parts.reduce((a, r) => Math.min(a, r[1] - 30), 0);
     for (const p of (focus && focus.points) || []) {
       const [x, y] = px(p);
       if (x > 0 && x < W && y > yMin && y < H) {
