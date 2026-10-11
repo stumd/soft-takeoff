@@ -310,7 +310,7 @@ export const SCENES = [
       {
         id: 'reactor', target: ['reactor', 'dcs'], title: 'Downriver', isNew: true,
         body: [
-          'There are four data centres now. Downriver there’s a squat white dome: a small reactor, built in eleven months by a company that didn’t exist three years ago.',
+          'There are four data centres now, counting the new one behind the solar farm. Downriver there’s a squat white dome: a small reactor, built in eleven months by a company that didn’t exist three years ago.',
           'At night, the warning lights on the cranes and towers blink in no particular order. June says it looks like the city is thinking.',
         ],
       },
@@ -822,7 +822,7 @@ export const SCENES = [
       {
         id: 'june', target: 'june', title: 'June, at the door', isNew: true,
         body: [
-          'June is at the garden door in her pyjamas, watching the street. Something is happening out there, and has been since dawn. Something quiet, and enormous.',
+          'June is at the garden door in her pyjamas, watching the city across the river. Something is happening out there, and has been since dawn. Something quiet, and enormous.',
           'She keeps saying “Mum. *Mum.*” and pointing, and then not being able to explain.',
         ],
       },

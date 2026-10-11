@@ -356,7 +356,9 @@ STATES[7] = (fr) => [
   inArmchair('arthur', 'arthur', 7, { cannula: true }),
   E('nurse', 'person', { who: 'nurse', h: 1.64, pose: 'kneel', top: '#3f6fa0', bottom: '#2f4a6a', hairStyle: 'bun', hairColor: '#1a1210', arms: 'forward' }, [-6.25, 0, -0.38], (5 * PI) / 4),
   E('nursebag', 'toolbag', {}, [-5.7, 0, -0.1]),
-  E('bigpip', 'robot', { kind: 'care' }, [-7.35, 0, -3.3], PI / 3),
+  // between the armchair and the table, where it stood by the bed: not
+  // behind the armchair, where Arthur's marker would land on it
+  E('bigpip', 'robot', { kind: 'care' }, [-5.3, 0, -1.75], 0.3),
   ...garden({ era: 7, lawn: 'autumn', tree: 'autumn', fallen: true, shed: { solar: true } }),
   veg('ripe'),
   E('grave', 'grave', {}, [6.1, 0, -0.5]),
