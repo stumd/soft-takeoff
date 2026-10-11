@@ -34,9 +34,28 @@ function skyX(sky, sx, z) {
   return sky.worldToLocal(_w.set(xAt(sx, z), 0, z)).x;
 }
 
+// The local z, in the sky layer, that puts a point at (x, y) of the layer at
+// world depth `z`. Things in the sky that should show in front of the far
+// district (a flat cut-out at z -95, which on tall phones rises into the
+// sky under the date card) but behind the city and its hill use a z between
+// -95 and the hill (-48): the camera is orthographic, so this changes
+// nothing else about them.
+const _d = { a: 0, bx: 0, by: 0, bz: 1, ok: false };
+function depthMap(sky) {
+  if (!sky) return (_d.ok = false), _d;
+  const a = sky.localToWorld(_w.set(0, 0, 0)).z;
+  _d.bx = sky.localToWorld(_w.set(1, 0, 0)).z - a;
+  _d.by = sky.localToWorld(_w.set(0, 1, 0)).z - a;
+  _d.bz = sky.localToWorld(_w.set(0, 0, 1)).z - a;
+  _d.a = a;
+  _d.ok = _d.bz > 1e-4;
+  return _d;
+}
+const zAt = (d, x, y, z) => (d.ok ? Math.max(0, (z - d.a - d.bx * x - d.by * y) / d.bz) : 0);
+
 // Shared between the things in the sky: where the moon is, so that launches
-// do not climb across it.
-const skyState = { moonX: 0, moonAt: -1 };
+// do not climb across it and its marker can keep clear of the date card.
+const skyState = { moonX: 0, moonY: 0, moonAt: -1 };
 
 // Where the night moon sits. Landscape screens have only a strip of sky above
 // the city, and the moon goes in a gap between its spires: the one between
@@ -44,22 +63,27 @@ const skyState = { moonX: 0, moonAt: -1 };
 // phones (whose strip is thinner still, and lower), the one east of the
 // Spindle. Those gaps are in the city, so the moon follows them across
 // screen shapes and the mouse's sway. Tall screens have open sky above the
-// skyline, and it sits there, below the date card. It never rides higher
-// than ~44px below the top edge.
+// skyline, and it sits there, below the date card and a little left of the
+// Spindle. It never rides higher than ~44px below the top edge.
 export function moonSpot(p = {}, sky = null) {
   const t = G.tall;
   if (p.x != null) return [fitX(p.x, 2.5), Math.min(p.y - 2.8 * t, belowTop(44))];
   const short = shortness() > 0.2;
   const gap = skyX(sky, short ? 16.4 : 4.7, -48) ?? (short ? 12.1 : 1.2);
-  return [fitX(mix(gap, 1.0, t), 2.5), Math.min(mix(11.55, 8.4, t), belowTop(44))];
+  const tallX = (skyX(sky, 11.2, -48.5) ?? 4.2) - 3.2;
+  return [fitX(mix(gap, tallX, t), 2.5), Math.min(mix(11.55, 8.4, t), belowTop(44))];
 }
 
 // The moon's marker, in the moon's own units: above it when there is room
-// under the top edge, otherwise beside it, on the right.
+// under the top edge and clear of the date card (top left), otherwise beside
+// it, on the right.
 export function moonMarker() {
-  const [, y] = moonSpot();
-  const room = (13.5 - y - 1.5) * pxPerUnit();
-  return room >= 22 ? [0, 1.5, 0] : [1.75, 0.5, 0];
+  const ppu = pxPerUnit();
+  const w = typeof window !== 'undefined' ? window.innerWidth : 1440;
+  const mx = w / 2 + skyState.moonX * ppu;
+  const my = (13.5 - skyState.moonY - 1.5) * ppu;
+  const clearOfCard = mx - 16 > 240 || my - 16 > 95;
+  return my >= 22 && clearOfCard ? [0, 1.5, 0] : [1.75, 0.5, 0];
 }
 
 // The band of sky the swarm's lines cross: high in the strip above the city
@@ -151,10 +175,16 @@ export function moon(p = {}) {
   // little lower on tall ones, whose frame has more sky above the city.
   g.position.set(...moonSpot(p), 0);
   g.userData.tick = () => {
-    const [x, y] = moonSpot(p, g.parent);
+    const sky = g.parent;
+    const [x, y] = moonSpot(p, sky);
     g.position.x = x;
     g.position.y = y;
+    // The night moon hangs just in front of the far district, so that on
+    // small phones it is not hidden behind it, and behind everything else.
+    // (its disc tilts by up to a world unit either way on tall screens)
+    if (!p.day) g.position.z = zAt(depthMap(sky), x, y, -92.5);
     skyState.moonX = x;
+    skyState.moonY = y;
     skyState.moonAt = G.time;
     // The night sky's glow is the moonlight: keep it behind the moon, in the
     // sky shader's coordinates (whose y starts at the foot of the city).
@@ -240,7 +270,7 @@ export function swarm(p = {}) {
       for (let k = 0; k < tr.n; k++, i++) {
         const b = 1 - 0.5 * (k / Math.max(1, tr.n - 1));
         col[i * 3] = col[i * 3 + 1] = col[i * 3 + 2] = b;
-        pos[i * 3 + 2] = -0.3; // behind the moon
+        pos[i * 3 + 2] = 0;
       }
     }
   }
@@ -261,6 +291,8 @@ export function swarm(p = {}) {
     const [lo, hi] = swarmBand();
     const H = Math.max(1, G.skyHalfW);
     const W = H + 1;
+    // in front of the far district, like the moon, but just behind it
+    const dm = depthMap(g.parent);
     let i = 0;
     for (const tr of trains) {
       const P = 2 * W + tr.n * tr.gap + tr.rest;
@@ -270,8 +302,10 @@ export function swarm(p = {}) {
         const x = -W + u;
         const xn = x / H;
         const yb = tr.y + tr.slope * xn + tr.curve * (xn * xn - 0.4);
+        const y = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
         pos[i * 3] = x;
-        pos[i * 3 + 1] = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
+        pos[i * 3 + 1] = y;
+        pos[i * 3 + 2] = zAt(dm, x, y, -94.2);
       }
     }
     geo.attributes.position.needsUpdate = true;
