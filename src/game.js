@@ -64,6 +64,10 @@ export class Game {
     stage.onTick.push((dt, t) => this._frame(dt, t));
     // Markers go where the camera is this frame, after it has moved.
     if (stage.onPost) stage.onPost.push(() => this._placeMarkers());
+    // The wheel zooms over the markers too; a double-click back to the
+    // default view frames an open panel's subject again.
+    if (stage.addWheelTarget) stage.addWheelTarget($('markers'));
+    stage.onViewReset = () => { if (this.panelOpen) this._layoutPanelShift(); };
     stage.onContextLost = () => this._contextLost();
     stage.onContextRestored = () => this._contextRestored();
     // The browser refused to give the context back: no point waiting.
@@ -122,6 +126,7 @@ export class Game {
     // reframed from _frame, which notices the new size.)
     const resized = () => {
       this._insetFresh = 30;
+      if (this._blk) this._blk.t = 0;
       this._kettleInsetPx = 0;
     };
     window.addEventListener('resize', resized);
@@ -690,6 +695,7 @@ export class Game {
     p.inert = false;
     p.scrollTop = 0;
     document.body.classList.add('panel-open');
+    if (this._blk) this._blk.t = 0;
     this.panelOpen = true;
     this._panelFor = h || null;
     this._layoutPanelShift();
@@ -779,6 +785,7 @@ export class Game {
     p.setAttribute('aria-hidden', 'true');
     p.inert = true;
     document.body.classList.remove('panel-open');
+    if (this._blk) this._blk.t = 0;
     this.panelOpen = false;
     this._panelFor = null;
     this.stage.cam.shiftT = 0;
@@ -895,6 +902,8 @@ export class Game {
     this._setHover(null);
     $('bottom').classList.add('hidden');
     const stage = this.stage, world = this.world;
+    // The story holds the camera until after the question.
+    stage.locked = true;
     const DUR = this.reduced ? KETTLE_DURATION : KETTLE_DURATION;
     const kettle = world.get('kettle');
     kettle?.obj.userData.setBoiling?.(true);
@@ -1011,6 +1020,7 @@ export class Game {
     q.classList.add('hidden');
     this.state = 'scene';
     this.busy = false;
+    this.stage.locked = false;
     const cam = this.stage.cam;
     const z0 = cam.extraZoom, p0 = cam.extraPanY;
     tweens.add({ dur: 2.2, delay: 0.6, ease: Ease.inOut, update: (k) => { cam.extraZoom = z0 + (1 - z0) * k; cam.extraPanY = p0 * (1 - k); } });
@@ -1071,8 +1081,9 @@ export class Game {
     $('bottom').classList.add('hidden');
     $('tools').classList.add('hidden');
     const cam = this.stage.cam;
+    this.stage.locked = true;
     cam.zoomT = 1; cam.panXT = 0; cam.panYT = 0;
-    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 0.8 * k; } });
+    tweens.add({ dur: 26, ease: Ease.inOut, update: (k) => { cam.extraZoom = 1 - 0.5 * k; cam.extraPanY = 0.8 * k; cam.lift = k; } });
     const end = $('ending');
     end.classList.remove('hidden');
     const lines = $('end-lines');
@@ -1099,6 +1110,8 @@ export class Game {
     $('tools').classList.remove('hidden');
     this.stage.cam.extraZoom = 1;
     this.stage.cam.extraPanY = 0;
+    this.stage.cam.lift = 0;
+    this.stage.locked = false;
     this.state = 'scene';
     this.busy = false;
     document.body.classList.remove('busy');
@@ -1156,8 +1169,15 @@ export class Game {
       top = Math.min(top, probe.getBoundingClientRect().top);
     }
     probe.remove();
-    // the street goes 12px above the inset (stage._streetShare)
-    this._kettleInsetPx = Math.max(window.innerWidth <= 720 ? 132 : 150, window.innerHeight - top + 4);
+    // the street goes 12px above the inset (stage._streetShare). On short
+    // screens (landscape phones), never more than 30% of the height: the
+    // pull-back keeps the street where it is, so a high street would leave
+    // the room under the date card and the city off the top. They have
+    // smaller subtitles to match (style.css).
+    const H = window.innerHeight;
+    const short = H <= 540;
+    const want = Math.max(short ? 0 : window.innerWidth <= 720 ? 132 : 150, H - top + 4);
+    this._kettleInsetPx = short ? Math.min(want, Math.round(0.3 * H)) : want;
     return this._kettleInsetPx;
   }
 
@@ -1182,6 +1202,7 @@ export class Game {
     const panelLeft = this.panelOpen && W > 720 ? W - $('panel').offsetWidth : Infinity;
     const shown = (this._shown ||= []);
     shown.length = 0;
+    const blockers = hideAll ? [] : this._markerBlockers();
     for (const h of this.scene.hotspots) {
       const m = this.markers.get(h.id);
       if (!m) continue;
@@ -1192,9 +1213,22 @@ export class Game {
       }
       const p = this.stage.toScreen(pos, this._p);
       // A marker that floats just above the top of the screen (tall things
-      // on short screens) comes down onto what it marks instead.
-      if (p.y < 16 && p.y > -60) p.y = 16;
-      const off = !p.visible || p.x < 8 || p.y < 8 || p.x > W - 8 || p.y > H - 8 || p.x > panelLeft - 10;
+      // on short screens) comes down onto what it marks instead, if some of
+      // that is in view.
+      let gone = false;
+      if (p.y < 16 && p.y > -60) {
+        if (this._markedLow(h) > 36) p.y = 16;
+        else gone = true;
+      }
+      // One under the date card or the sound and help buttons (which would
+      // take its taps) comes down below them onto what it marks, or hides.
+      for (const r of blockers) {
+        if (p.x < r[0] - 8 || p.x > r[2] + 8 || p.y < r[1] - 8 || p.y > r[3] + 8) continue;
+        const y = r[3] + 16;
+        if (this._markedLow(h) > y + 8) p.y = y;
+        else gone = true;
+      }
+      const off = gone || !p.visible || p.x < 8 || p.y < 8 || p.x > W - 8 || p.y > H - 8 || p.x > panelLeft - 10;
       m.classList.toggle('offscreen', off);
       // (seen markers are hidden, so they don't take up room)
       if (!off) shown.push({ m, x: p.x, y: p.y, x0: p.x, y0: p.y, live: !m.classList.contains('seen') || m.classList.contains('show-seen') });
@@ -1207,11 +1241,54 @@ export class Game {
     }
   }
 
+  // Screen rects [x0, y0, x1, y1] that markers keep out from under: the sound
+  // and help buttons, and the date card while it shows. Measured a few times
+  // a second (they glide aside when a panel opens, and fade), and at once
+  // when a panel opens or closes or the screen changes (_blk.t = 0).
+  _markerBlockers() {
+    const c = (this._blk ||= { t: 0, list: [] });
+    const now = performance.now();
+    if (now - c.t < 150) return c.list;
+    c.t = now;
+    c.list = [];
+    const rect = (el) => { const r = el.getBoundingClientRect(); return [r.left, r.top, r.right, r.bottom]; };
+    const tools = $('tools'), hud = $('hud');
+    if (!tools.classList.contains('hidden')) c.list.push(rect(tools));
+    if (!hud.classList.contains('hidden') && Number(getComputedStyle(hud).opacity) > 0.3) c.list.push(rect(hud.querySelector('.hud-card') || hud));
+    return c.list;
+  }
+
+  // The lowest point on screen (CSS px, y down) of the thing a hotspot's
+  // marker stands on (its first object). Its world box is kept for a moment;
+  // the projection is this frame's.
+  _markedLow(h) {
+    const cache = (this._lowBoxes ||= new Map());
+    const now = performance.now();
+    let c = cache.get(h);
+    if (!c || now - c.t > 500) {
+      const e = this.world._targets ? this.world._targets(h)[0] : null;
+      const box = (c && c.box) || new THREE.Box3();
+      if (e) box.setFromObject(e.obj);
+      else box.makeEmpty();
+      c = { box, t: now };
+      cache.set(h, c);
+    }
+    if (c.box.isEmpty()) return -Infinity;
+    const b = c.box, v = this._lowV || (this._lowV = new THREE.Vector3()), q = this._lowP || (this._lowP = { x: 0, y: 0, visible: true });
+    let low = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      v.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
+      low = Math.max(low, this.stage.toScreen(v, q).y);
+    }
+    return low;
+  }
+
   // Markers closer than a fingertip (28px) are pushed apart along the line
-  // between them, each by at most 14px from its own spot, so that each can
-  // still be tapped (people round the kitchen table, the kettle by Pip).
+  // between them, each by at most 14px from its own spot (18px on short
+  // screens, whose room is smaller), so that each can still be tapped
+  // (people round the kitchen table, the kettle by Pip).
   _spreadMarkers(list) {
-    const MIN = 28, CAP = 14;
+    const MIN = 28, CAP = window.innerHeight < 540 ? 18 : 14;
     const live = list.filter((s) => s.live);
     for (let pass = 0; pass < 3; pass++) {
       let moved = false;
