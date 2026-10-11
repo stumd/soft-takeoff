@@ -671,8 +671,10 @@ export function telescope(p = {}) {
   const tube = cyl(0.06, 0.07, 0.8, '#f2f2f0', { y: -0.4 });
   const piv = new THREE.Group();
   piv.position.y = 1.0;
+  // Tilt first, then turn: `dir` is the compass bearing of the tilted tube.
+  piv.rotation.order = 'YXZ';
   piv.rotation.x = -0.9;
-  piv.rotation.y = p.dir || 0.8;
+  piv.rotation.y = p.dir ?? 0.8;
   piv.add(tube);
   g.add(piv);
   return g;

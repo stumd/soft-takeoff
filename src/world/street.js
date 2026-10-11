@@ -401,8 +401,10 @@ export function tomaszHouse(p = {}) {
 }
 
 export function tomaszSign(p = {}) {
-  const t = textTex('tsign', ['HUMAN DRIVERS', 'SAVE LIVES'], { w: 512, h: 384, bg: '#f3e64a', fg: '#1a1a1a', font: '800 74px "Inter", Arial, sans-serif' });
-  return group(card(0.62, 0.46, t, { x: 14.6, y: 1.1, z: -1.5 }));
+  // A placard filling most of the front window, one word to a line so the
+  // letters are as big as the window allows (it is a few dozen pixels wide).
+  const t = textTex('tsign4', ['HUMAN', 'DRIVERS', 'SAVE', 'LIVES'], { w: 480, h: 512, bg: '#f3e64a', fg: '#1a1a1a', font: '900 120px "Inter", Arial, sans-serif', pad: 22, lineH: 1.04, border: '#1a1a1a' });
+  return group(card(0.8, 0.86, t, { x: 14.6, y: 1.5, z: -1.5 }));
 }
 
 export function tomaszBanner(p = {}) {
