@@ -2,7 +2,7 @@
 
 *The world is about to get very fast. The kettle still takes three minutes.*
 
-An isometric, exploratory story about living through the singularity, told from one family's kitchen.
+An exploratory story about living through the singularity, told from one family's kitchen.
 
 You visit the same kitchen ten times. The first gap between visits is twenty-two months. Then sixteen months, six months, three months, one month, one week, one day, one night. The last visit lasts the three minutes it takes the kettle to boil. Then there's a gap of twenty years.
 
@@ -27,7 +27,7 @@ Progress is saved in your browser. For development, `?scene=N` jumps straight to
 
 ## The design
 
-**One room, revisited.** The diorama is a cut-away kitchen-diner, a garden, a street and the house next door, with the city across the river behind them. Nothing in it is explained directly. Changes in the world show up as objects: a speaker appears on the counter, a hi-vis vest hangs by the door, a letter about the National Dividend lies on the table, the dog's bed is empty.
+**One room, revisited.** The scene is a cut-away kitchen-diner, a garden and the house next door in an ordinary street, seen from across the road, with the city climbing the hill across the river behind them. Nothing in it is explained directly. Changes in the world show up as objects: a speaker appears on the counter, a hi-vis vest hangs by the door, a letter about the National Dividend lies on the table, the dog's bed is empty.
 
 **The timeline is the story.** The timeline at the bottom of the screen is linear in calendar time, so the visits visibly bunch up towards the end. That bunching is what exponential progress looks like from inside a life.
 
@@ -53,7 +53,7 @@ Progress is saved in your browser. For development, `?scene=N` jumps straight to
 
 Everything is procedural, with no image or audio assets:
 
-- **Rendering:** [three.js](https://threejs.org) with an orthographic isometric camera, soft shadows and per-scene lighting presets. The distant city fades into a sky-matched mist, so far-off buildings rise out of haze. Static meshes are merged per material to keep draw calls low.
+- **Rendering:** [three.js](https://threejs.org) with a near side-on orthographic camera, like a paper theatre, soft shadows and per-scene lighting presets. The city rises behind the street in rows up a hill, each row smaller and paler than the last, with an uneven ground mist that takes the colour of the sky behind it. Static meshes are merged per material, and the city and neighbourhood are vertex-coloured batches, to keep draw calls low.
 - **Graphics tiers:** Full (desktop), Lite (phones: Lambert materials, no MSAA, lower resolution) and Text only (no WebGL). Real-time shadows are a separate switch: they are off by default on PowerVR GPUs (Pixel 10), whose drivers reset the WebGL context when shaders sample a shadow map, and off after any context loss; soft contact shadows stand in. Help → Graphics shows what was chosen and why, and can copy a diagnostics report including a log of recent context losses.
 - **Scene diffing:** each visit is a list of entities. Between visits the world works out what changed and rebuilds only that part. Furniture pops in, and towers rise out of the ground one at a time behind the time-passing veil.
 - **Audio:** generative WebAudio. A slow pad plays under an arpeggio that gets faster with every visit. There's weather and birdsong, the kettle's rising hiss, radio static, and a small waltz played through the radio's tiny speaker.

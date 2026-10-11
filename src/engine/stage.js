@@ -385,7 +385,9 @@ export class Stage {
   // next door still fit across, and the extra height goes to the city and sky.
   frustumBase() {
     const aspect = this.width / this.height;
-    return Math.max(this.view.frustum, this.view.fitW / aspect);
+    // short screens (landscape phones) give up a little size for some skyline
+    const fr = this.view.frustum + 4 * clamp((540 - this.height) / 180, 0, 1);
+    return Math.max(fr, this.view.fitW / aspect);
   }
 
   // Story pull-backs (kettle, ending) open up less on tall screens, whose
@@ -418,6 +420,16 @@ export class Stage {
     return fb / 2 - drop - this._streetShare() * fb;
   }
 
+  // The same, with the player's zoom: zooming in closes on the house (it
+  // stays where it is on screen), zooming out keeps the street where it is
+  // and opens up the city and sky above, never a field of empty ground below.
+  frameCentreY() {
+    const off = this.frameOffsetY();
+    const z = this.cam.zoom;
+    const pivot = z < 1 ? this._rel(this.view.street, (this._camUp ||= new THREE.Vector3(0, 1, 0))) : 0;
+    return pivot + (off - pivot) / z;
+  }
+
   // Narrow screens: slide the frame left until the room's front-left corner
   // is at least ~30px from the edge (clear of edge-swipe gestures). The
   // garden and next door give way on the right instead.
@@ -438,7 +450,7 @@ export class Stage {
     const fh = this.frustumH();
     const up = (this._camUp ||= new THREE.Vector3(0, 1, 0));
     const c = this.cam;
-    const sy = c.panY + c.extraPanY + this.frameOffsetY();
+    const sy = c.panY + c.extraPanY + this.frameCentreY();
     const h = this.height;
     // screen fractions (from the top) of the room's top and bottom, unshifted
     const top = 0.5 - (this._rel(this.view.roomTop, up) - sy) / fh;
@@ -458,7 +470,7 @@ export class Stage {
     const up = this._camUp;
     const street = this._rel(this.view.street, up);
     const fb = this.frustumBase() / this.pullback();
-    const maxBand = Math.max(this._streetShare() * fb + 1.2, 0.2 * fh);
+    const maxBand = Math.max(this._streetShare() * fb + 0.8, 0.12 * fh);
     // frame bottom = sy0 + panY - fh / 2 must stay above street - maxBand
     // (never pushes the default view itself, pan 0, upwards)
     const lo = Math.min(0, street - maxBand + fh / 2 - sy0);
@@ -493,7 +505,7 @@ export class Stage {
     const aspect = this.width / this.height;
     const fh = this.frustumH();
     const fw = fh * aspect;
-    const sy0 = c.extraPanY + c.shiftY * fh + this.frameOffsetY();
+    const sy0 = c.extraPanY + c.shiftY * fh + this.frameCentreY();
     this._clampPan(fh, sy0);
     const sx = c.panX + c.shift * fw + this.frameOffsetX();
     const sy = c.panY + sy0;

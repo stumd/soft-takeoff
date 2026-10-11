@@ -138,17 +138,19 @@ function house(b, win, r, o, zf, t) {
       for (let i = 0; i < cols; i++) {
         const x = x0 + (i + 0.5) * (w / cols);
         if (Math.abs(x - bx) < 1.4 || Math.abs(x - doorX) < 1.0) continue;
-        b.box(1.0, 1.1, 0.06, trim, x, y - 0.05, zf + 0.02);
-        win[r() < 0.4 ? 'lit' : 'dark'].box(0.86, 0.96, 0.04, '#2a3540', x, y + 0.02, zf + 0.05);
+        const lit = r() < 0.4;
+        if (!LITE) b.box(1.0, 1.1, 0.06, trim, x, y - 0.05, zf + 0.02);
+        win[lit ? 'lit' : 'dark'].box(0.86, 0.96, 0.04, '#2a3540', x, y + 0.02, zf + 0.05);
       }
       continue;
     }
     for (let i = 0; i < cols; i++) {
       const x = x0 + (i + 0.5) * (w / cols);
       if (row === 0 && Math.abs(x - doorX) < 1.0) continue;
-      b.box(1.0, 1.1, 0.06, trim, x, y - 0.05, zf + 0.02);
-      win[r() < 0.4 ? 'lit' : 'dark'].box(0.86, 0.96, 0.04, '#2a3540', x, y + 0.02, zf + 0.05);
-      b.box(1.1, 0.06, 0.16, '#e6e0d4', x, y - 0.08, zf + 0.08);
+      const lit = r() < 0.4;
+      if (!LITE) b.box(1.0, 1.1, 0.06, trim, x, y - 0.05, zf + 0.02);
+      win[lit ? 'lit' : 'dark'].box(0.86, 0.96, 0.04, '#2a3540', x, y + 0.02, zf + 0.05);
+      if (!LITE) b.box(1.1, 0.06, 0.16, '#e6e0d4', x, y - 0.08, zf + 0.08);
     }
   }
   // a side window, seen a little from the right
@@ -305,7 +307,7 @@ export function surrounds(p = {}) {
   b.box(XR - XL, 0.12, 0.12, '#d6d2ca', (XL + XR) / 2, 0, 8.42);
   b.quad(XL, XR, 10.25, 60, t.snow ? '#e4eaee' : t.hedge, -0.03);
   {
-    const D0 = LITE ? -40 : -60, D1 = LITE ? 52 : 74;
+    const D0 = LITE ? -24 : -60, D1 = LITE ? 34 : 74;
     let x = D0;
     while (x < D1) {
       const w = 5.4 + r() * 1.6;

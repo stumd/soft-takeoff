@@ -158,7 +158,7 @@ STATES[2] = (fr) => [
   E('meridian', 'meridian', { stage: 'complete' }),
   E('dcs', 'datacentres', { n: 3 }),
   E('reactor', 'reactor'),
-  E('solar', 'solarField'),
+  E('solar', 'solarField', { snow: true }),
   E('snowfall', 'snowfall'),
 ];
 

@@ -1,5 +1,6 @@
 import { THREE, cyl, group, textTex, windowTex, emissiveWindowTex, addMist, markCached, drawnTexture } from './kit.js';
 import { Batch } from './batch.js';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { G } from '../engine/stage.js';
 import { QUALITY } from '../engine/quality.js';
 import { rng } from '../engine/tween.js';
@@ -176,11 +177,11 @@ export function city(p = {}) {
       if (LITE && ri >= 3 && roll > 0.72) return false;
       return true;
     };
-    const tree = (sx, z, k = 1) => {
+    const tree = (sx, z, k = 1, rr = r) => {
       const x = xAt(sx, z), y = groundY(sx, z);
-      const rad = (0.32 + r() * 0.22) * s * k;
-      batch.ico(rad, pick(r, trees), x, y + rad * 0.8, z, { sy: 1.15 });
-      if (!LITE && r() < 0.5) batch.ico(rad * 0.75, pick(r, trees), x + rad * 0.7, y + rad * 0.6, z + (r() - 0.5) * rad);
+      const rad = (0.32 + rr() * 0.22) * s * k;
+      batch.ico(rad, pick(rr, trees), x, y + rad * 0.8, z, { sy: 1.15 });
+      if (!LITE && rr() < 0.5) batch.ico(rad * 0.75, pick(rr, trees), x + rad * 0.7, y + rad * 0.6, z + (rr() - 0.5) * rad);
     };
 
     let sx = SX0 + r() * 3;
@@ -192,7 +193,11 @@ export function city(p = {}) {
         // a park, a churchyard, a bit of green
         const len = (1.6 + r() * 2.6) * s;
         const n = Math.round(len / (0.9 * s));
-        for (let i = 0; i < n; i++) if (keep(r(), sx) || green) tree(sx + (i + 0.5) * (len / n), row.z + (r() - 0.5) * 1.6 * s, 1.1);
+        const rp = rng(Math.floor(r() * 2147483646) + 1);
+        for (let i = 0; i < n; i++) {
+          const kr = rp(), tz = rp();
+          if (keep(kr, sx) || green) tree(sx + (i + 0.5) * (len / n), row.z + (tz - 0.5) * 1.6 * s, 1.1, rng(Math.floor(kr * 1e6) + i + 1));
+        }
         sx += len + 0.4 * s;
         continue;
       }
@@ -231,10 +236,13 @@ export function city(p = {}) {
         }
         const cx = sx + w / 2;
         sx += used + (r() < 0.12 ? (0.15 + r() * 0.3) * s : 0.03);
+        // Everything else about this building comes from its own stream, so
+        // leaving it out (thin, green) doesn't change the ones after it.
+        const rb = rng(Math.floor(r() * 2147483646) + 1);
         if (works(ri, cx)) {
           // open ground downriver: a few trees
-          if (roll < 0.85) tree(cx, zc, 1.2);
-          if (roll < 0.4) tree(cx + 0.9, zc - 0.8, 1.1);
+          if (roll < 0.85) tree(cx, zc, 1.2, rb);
+          if (roll < 0.4) tree(cx + 0.9, zc - 0.8, 1.1, rb);
           continue;
         }
         if (!keep(roll, cx)) continue;
@@ -242,13 +250,13 @@ export function city(p = {}) {
         const x = xAt(cx, zc), y = groundY(cx, zf) - 0.04;
         if (kind === 'terrace') {
           const n = Math.round(w / ((0.62 + cr * 0.2) * s));
-          const wall = cr < 0.55 ? pick(r, PAL.brick) : pick(r, PAL.render);
+          const wall = cr < 0.55 ? pick(rb, PAL.brick) : pick(rb, PAL.render);
           const rc = roofCol(cr < 0.5 ? ROOF.tile : ROOF.slate);
           batch.box(w, h, d, wall, x, y, zc, { unit: 1.5 * s });
           batch.roof(w + 0.06 * s, 0.27 * d, d + 0.1 * s, rc, x, y + h, zc);
           if (!row.far) for (let i = 0; i < n; i++) batch.box(0.1 * s, 0.22 * s, 0.12 * s, '#7a5040', xAt(cx - w / 2 + (i + 0.5) * (w / n), zc), y + h + 0.12 * s, zc - 0.12 * s);
         } else if (kind === 'warehouse') {
-          const wall = pick(r, PAL.ware);
+          const wall = pick(rb, PAL.ware);
           batch.box(w, h, d, wall, x, y, zc);
           // a row of gables, ridges running back, and a big door
           const teeth = Math.max(2, Math.round(w / (0.9 * s)));
@@ -256,8 +264,8 @@ export function city(p = {}) {
           for (let i = 0; i < teeth; i++) batch.roof(d + 0.04, 0.28 * s, tw, roofCol(i % 2 ? ROOF.lead : '#7d8288'), xAt(cx - w / 2 + (i + 0.5) * tw, zc), y + h, zc, { ry: Math.PI / 2 });
           batch.box(0.5 * s, 0.42 * s, 0.03, '#3a3e44', xAt(cx - w * 0.25, zf), y, zf + 0.01);
         } else {
-          const pal = kind === 'tower' ? PAL.glass : kind === 'slab' ? PAL.concrete : pick(r, [PAL.concrete, PAL.concrete, PAL.render, PAL.brick]);
-          const col = pick(r, pal);
+          const pal = kind === 'tower' ? PAL.glass : kind === 'slab' ? PAL.concrete : pick(rb, [PAL.concrete, PAL.concrete, PAL.render, PAL.brick]);
+          const col = pick(rb, pal);
           const unit = kind === 'tower' ? row.unit * 0.8 : row.unit;
           if (kind === 'tower') {
             // a setback two-thirds of the way up, and a mast
@@ -283,7 +291,7 @@ export function city(p = {}) {
           }
         }
         // a street tree out front now and then
-        if (!row.far && r() < 0.18) tree(sx + 0.1, zf + 0.35 * s, 0.8);
+        if (!row.far && rb() < 0.18) tree(sx + 0.1, zf + 0.35 * s, 0.8, rb);
         maxH = Math.max(maxH, h + y);
         if (++count >= perClump) flush();
       }
@@ -689,7 +697,7 @@ export function solarField(p = {}) {
   const yAt = (z) => (Z0 - z) * Math.tan(SLOPE);
   const hill = new THREE.Group();
   const hb = new Batch();
-  hb.box(15, 0.4, D / Math.cos(SLOPE) + 0.4, '#8f9f66', xAt(22.4, Z0 - D / 2), yAt(Z0 - D / 2) - 0.4, Z0 - D / 2, { rx: SLOPE });
+  hb.box(15, 0.4, D / Math.cos(SLOPE) + 0.4, p.snow ? '#e8edf0' : '#8f9f66', xAt(22.4, Z0 - D / 2), yAt(Z0 - D / 2) - 0.4, Z0 - D / 2, { rx: SLOPE });
   hill.add(hb.mesh(batchMat(0.8)));
   hill.userData.h = 2;
   g.add(hill);
@@ -763,6 +771,19 @@ export function newTowers(p = {}) {
   return g;
 }
 
+// Glass that is glass by day and glows by night (the factory's roof lights).
+function nightGlass(color, glow, k = 1) {
+  const key = 'n' + color + glow + k;
+  if (plainMist.cache[key]) return plainMist.cache[key];
+  const m = new THREE.MeshLambertMaterial({ color, emissive: glow, emissiveIntensity: 0 });
+  m.userData.nightK = k;
+  addMist(m, 0.8);
+  markCached(m);
+  nightMats.push(m);
+  plainMist.cache[key] = m;
+  return m;
+}
+
 export function factory(p = {}) {
   const g = new THREE.Group();
   const W = 9, D = 4.5;
@@ -772,9 +793,9 @@ export function factory(p = {}) {
     tooth.position.set(-W / 2 + 0.75 + i * 1.5, 2.8, 0);
     tooth.rotation.z = 0.5;
     g.add(tooth);
-    g.add(mb(0.1, 0.6, D, glowMist('#ffb35a', 1.2), -W / 2 + 1.45 + i * 1.5, 2.4, 0));
+    g.add(mb(0.1, 0.6, D, nightGlass('#9aa8b4', '#ffb35a', 1.0), -W / 2 + 1.45 + i * 1.5, 2.4, 0));
   }
-  g.add(mb(W * 0.6, 1.4, 0.05, glowMist('#ff9a3d', 0.9), 0, 0.2, D / 2 + 0.03));
+  g.add(mb(W * 0.6, 1.4, 0.05, nightGlass('#5a6672', '#ff9a3d', 0.8), 0, 0.2, D / 2 + 0.03));
   g.userData.h = 3;
   g.scale.setScalar(0.8);
   place(g, -11.8, -24.4);
@@ -819,29 +840,30 @@ export function lattice(p = {}) {
 // and glimmers by night.
 export function spindle(p = {}) {
   const g = new THREE.Group();
-  const H = 64;
+  const H = p.partial ? 7.5 : 64;
   const m = new THREE.MeshLambertMaterial({ color: '#fbf8f2', emissive: '#fff6e4', emissiveIntensity: 0.55 });
   addMist(m, 0.3);
-  const ringM = glowMist('#ffe6b0', 1.1);
   const day = new THREE.Color('#fff6e4'), night = new THREE.Color('#8a92a8');
-  // under construction it is a stub with a glowing collar where it grows
-  const segs = p.partial ? 2 : 16;
-  const hh = H / 16;
-  for (let i = 0; i < segs; i++) {
-    const r0 = 0.26 - i * 0.009;
-    const s = new THREE.Mesh(new THREE.CylinderGeometry(r0 - 0.009, r0, hh, 8), m);
-    s.position.y = i * hh + hh / 2;
-    const seg = group(s);
-    seg.userData.h = hh;
-    g.add(seg);
-    if (i % 3 === 1 || (p.partial && i === segs - 1)) {
-      const ring = new THREE.Mesh(new THREE.TorusGeometry(r0 + 0.5 - i * 0.012, 0.045, 5, 28), ringM);
-      ring.rotation.x = Math.PI / 2;
-      ring.position.y = (i + 1) * hh - 0.3;
-      g.add(ring);
-    }
+  // the thread: one long taper (under construction, a stub)
+  const r0 = 0.26, r1 = p.partial ? 0.24 : 0.12;
+  const thread = new THREE.Mesh(new THREE.CylinderGeometry(r1, r0, H, LITE ? 6 : 8, 1, true), m);
+  thread.position.y = H / 2;
+  g.add(thread);
+  // rings of light every so often (one at the top of the stub, where it grows)
+  const rings = [];
+  const ys = p.partial ? [H - 0.25] : [6.5, 18.5, 30.5, 42.5, 54.5];
+  for (const y of ys) {
+    const rr = 0.72 - (y / 64) * 0.2;
+    const t = new THREE.TorusGeometry(rr, 0.045, LITE ? 4 : 5, LITE ? 18 : 28);
+    t.rotateX(Math.PI / 2);
+    t.translate(0, y, 0);
+    rings.push(t);
   }
-  g.userData.stagger = true;
+  const rg = mergeGeometries(rings, false);
+  for (const t of rings) t.dispose();
+  g.add(new THREE.Mesh(rg, glowMist('#ffe6b0', 1.1)));
+  // it grows up out of the ground, as one
+  g.userData.h = H;
   g.userData.tick = () => m.emissive.copy(day).lerp(night, Math.min(1, G.night * 0.8));
   place(g, 11.2, -48.5, -0.2);
   // the hotspot marker: on the thread, a little above the skyline
