@@ -37,9 +37,11 @@ function skyX(sky, sx, z) {
 // The local z, in the sky layer, that puts a point at (x, y) of the layer at
 // world depth `z`. Things in the sky that should show in front of the far
 // district (a flat cut-out at z -95, which on tall phones rises into the
-// sky under the date card) but behind the city and its hill use a z between
-// -95 and the hill (-48): the camera is orthographic, so this changes
-// nothing else about them.
+// sky under the date card) and the land that runs back to it from the
+// crest (surrounds.js), but behind the city, its hill and the Spindle
+// (z -48.5), use a z just behind the Spindle (SKY_FRONT): the camera is
+// orthographic, so this changes nothing else about them.
+const SKY_FRONT = -50.5;
 const _d = { a: 0, bx: 0, by: 0, bz: 1, ok: false };
 function depthMap(sky) {
   if (!sky) return (_d.ok = false), _d;
@@ -174,15 +176,19 @@ export function moon(p = {}) {
   // Clear of the skyline: high in the band of sky on a landscape screen, a
   // little lower on tall ones, whose frame has more sky above the city.
   g.position.set(...moonSpot(p), 0);
+  // (sideways it keeps to its gap in the city, so it moves with the view as
+  // the city does: an open panel frames its disc, as it would a building)
+  if (p.x == null) g.userData.focus = disc;
   g.userData.tick = () => {
     const sky = g.parent;
     const [x, y] = moonSpot(p, sky);
     g.position.x = x;
     g.position.y = y;
-    // The night moon hangs just in front of the far district, so that on
-    // small phones it is not hidden behind it, and behind everything else.
-    // (its disc tilts by up to a world unit either way on tall screens)
-    if (!p.day) g.position.z = zAt(depthMap(sky), x, y, -92.5);
+    // The night moon hangs in front of the far district and its land, so
+    // that on small phones it is not hidden behind them, and behind
+    // everything else. (its disc tilts by up to a world unit either way on
+    // tall screens; the Spindle stands two units in front)
+    if (!p.day) g.position.z = zAt(depthMap(sky), x, y, SKY_FRONT);
     skyState.moonX = x;
     skyState.moonY = y;
     skyState.moonAt = G.time;
@@ -304,7 +310,7 @@ export function swarm(p = {}) {
         const y = lo + (hi - lo) * yb + 0.06 * Math.sin(x * 0.8 + tr.wig);
         pos[i * 3] = x;
         pos[i * 3 + 1] = y;
-        pos[i * 3 + 2] = zAt(dm, x, y, -94.2);
+        pos[i * 3 + 2] = zAt(dm, x, y, SKY_FRONT - 1.2);
       }
     }
     geo.attributes.position.needsUpdate = true;

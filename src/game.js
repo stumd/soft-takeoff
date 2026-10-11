@@ -529,6 +529,16 @@ export class Game {
     this.furthest = Math.max(this.furthest, i);
     this.scene = sc;
     this.world.setHotspots(sc.hotspots);
+    // A scene whose hotspots are things in the sky (the moon, the lights)
+    // keeps a strip of sky in view on short screens.
+    if (!QUALITY.text && this.stage.setSkyScene) {
+      const w = this.world;
+      const inSky = (h) => {
+        const e = w.get(Array.isArray(h.target) ? h.target[0] : h.target);
+        return !!(e && w.sky && e.obj.parent === w.sky);
+      };
+      this.stage.setSkyScene(sc.hotspots.some(inSky));
+    }
     if (import.meta.env && import.meta.env.DEV && !QUALITY.text) {
       for (const h of sc.hotspots) {
         const ids = Array.isArray(h.target) ? h.target : [h.target];
@@ -707,22 +717,52 @@ export class Game {
     const free = W <= 720
       ? { sheet: true, left: 16, right: W - 16, top, bottom: H - p.offsetHeight - 6 }
       : { left: 16, right: W - p.offsetWidth - 16, top, bottom: H - 8 };
-    const s = this.stage.panelShift(this._focusOf(this._panelFor), free);
+    if (!free.sheet) {
+      // Along the top: the date card (stepped aside beside the panel up to
+      // 1100px wide, see style.css) and the sound and help buttons, where they
+      // come to rest beside the panel (they glide there).
+      const tools = $('tools');
+      const cardOn = card && !window.matchMedia('(max-width: 1100px)').matches;
+      free.band = {
+        bottom: Math.max(cardOn ? card.bottom : 0, tools.getBoundingClientRect().bottom) + 8,
+        left: cardOn ? card.right + 8 : 16,
+        right: W - p.offsetWidth - 18 - tools.offsetWidth - 8,
+      };
+    }
+    const focus = this._focusOf(this._panelFor);
+    // Something in the sky that stays put on screen (the lights): a sheet
+    // leaves the view where it is. Lifting the room into the strip above the
+    // sheet would raise the city up over the sky it is about.
+    if (focus.sky && !focus.boxes.length && free.sheet) {
+      cam.shiftT = cam.shiftYT = 0;
+      return;
+    }
+    const s = this.stage.panelShift(focus, free);
     cam.shiftT = s.x;
     cam.shiftYT = s.y;
   }
 
   // What an open panel is about, for the camera to frame: the world boxes of
   // the hotspot's objects and its marker. Things in the sky layer are left
-  // out (it stays put on screen whatever the camera does); with nothing left,
-  // the stage frames the room.
+  // out (it stays put on screen whatever the camera does: `sky` notes them),
+  // unless they keep to a place in the world and name the part of them to
+  // frame (userData.focus: the night moon, in a gap in the city); with
+  // nothing left, the stage frames the room.
   _focusOf(h) {
     const w = this.world;
-    const out = { boxes: [], points: [] };
+    const out = { boxes: [], points: [], sky: false };
     if (!h || !w._targets) return out;
     for (const e of w._targets(h)) {
-      if (!e.obj.visible || (w.sky && e.obj.parent === w.sky)) continue;
-      const b = new THREE.Box3().setFromObject(e.obj);
+      if (!e.obj.visible) continue;
+      let o = e.obj;
+      if (w.sky && o.parent === w.sky) {
+        o = o.userData.focus;
+        if (!o) {
+          out.sky = true;
+          continue;
+        }
+      }
+      const b = new THREE.Box3().setFromObject(o);
       if (!b.isEmpty()) out.boxes.push(b);
     }
     if (out.boxes.length) {

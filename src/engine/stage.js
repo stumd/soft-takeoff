@@ -180,6 +180,9 @@ export class Stage {
       shiftY: 0, shiftYT: 0, // vertical shift when the bottom sheet is open (phones)
       extraZoom: 1, // story-driven zoom (kettle sequence, ending)
       extraPanY: 0,
+      // 1 in a scene about the sky (the moon, the lights): short screens open
+      // out to keep a strip of it above the city (see frustumBase)
+      sky: 0, skyT: 0,
     };
 
     this._makeSky();
@@ -437,6 +440,16 @@ export class Stage {
     return clamp((1.0 - this.width / this.height) / 0.5, 0, 1);
   }
 
+  // A scene about the sky, or not (see frustumBase). Eases, behind the
+  // scene change's veil; the first call (the scene the game opens on) snaps.
+  setSkyScene(on) {
+    this.cam.skyT = on ? 1 : 0;
+    if (!this._skySet) {
+      this._skySet = true;
+      this.cam.sky = this.cam.skyT;
+    }
+  }
+
   // The height (CSS px) of the bar along the bottom of the screen, which the
   // street sits just above. 0 when nothing is there (title, kettle, ending).
   // `under`: the bar is glass the street may run a little way beneath (the
@@ -456,8 +469,11 @@ export class Stage {
   frustumBase() {
     const aspect = this.width / this.height;
     // Short screens (landscape phones) close in a little, so the house stays
-    // a size you can read and tap; the top of the skyline gives way.
-    const fr = this.view.frustum - 4 * clamp((540 - this.height) / 180, 0, 1);
+    // a size you can read and tap; the top of the skyline gives way. In a
+    // scene about the sky (the moon, the lights in it: cam.sky) they open
+    // out instead, so a strip of sky stays above the city for them.
+    const k = clamp((540 - this.height) / 180, 0, 1);
+    const fr = this.view.frustum - 4 * k + 8 * k * this.cam.sky;
     return Math.max(fr, this.view.fitW / aspect);
   }
 
@@ -589,7 +605,9 @@ export class Stage {
   //          things in the sky, which stays put on screen) the room is framed.
   //   free:  { left, right, top, bottom } in CSS px; `sheet` for the phone's
   //          bottom sheet (centre up/down, sideways only to bring it fully on
-  //          screen), else a side panel (centre sideways).
+  //          screen), else a side panel (centre sideways). A side panel's
+  //          `band` { bottom, left, right }: above `bottom` only left..right
+  //          is clear (the date card and the buttons along the top).
   // The room comes too whenever it fits beside the subject. A subject too big
   // for the space keeps its top clear of the date card (sheet) or its middle
   // in the middle (side panel). Worked out on the frame before any shift,
@@ -632,7 +650,9 @@ export class Stage {
     // The subject: what of it is on screen now. Something cut by a side of
     // the screen is taken whole if it would fit; very wide things (the street,
     // a skyline) only for the part in view.
-    let S = null, S1 = null;
+    // (each part as a screen rect [x0, y0, x1, y1]; `main`: the first object,
+    // which the marker stands on, and the marker)
+    const parts = [], main = [];
     for (const b of (focus && focus.boxes) || []) {
       const r = boxPx(b);
       const vy0 = Math.max(0, r[1]), vy1 = Math.min(H, r[3]);
@@ -640,31 +660,53 @@ export class Stage {
       if (vy1 <= vy0 || vx1 <= vx0) continue;
       const whole = fitsX(r);
       const v = [whole ? r[0] : vx0, vy0, whole ? r[2] : vx1, vy1];
-      S = union(S, v);
-      // (the first object is the main one: the marker stands on it)
-      if (b === focus.boxes[0]) S1 = v;
+      parts.push(v);
+      if (b === focus.boxes[0]) main.push(v);
     }
     for (const p of (focus && focus.points) || []) {
       const [x, y] = px(p);
       if (x > 0 && x < W && y > 0 && y < H) {
         const m = [x - 14, y - 14, x + 14, y + 14];
-        S = union(S, m);
-        S1 = union(S1, m);
+        parts.push(m);
+        main.push(m);
       }
     }
+    const all = (list) => list.reduce((a, r) => union(a, r), null);
+    // Beside a side panel, the strip along the top of the screen is narrower
+    // (the date card on its left, the sound and help buttons on its right:
+    // free.band), and a part reaching up into it must also land between
+    // those. The moves (px to the right) that keep a set of parts in the
+    // free space, or null if none does:
+    const band = !free.sheet && free.band;
+    const range = (list) => {
+      const F = all(list);
+      let lo = free.left - F[0], hi = free.right - F[2];
+      if (band) {
+        for (const r of list) {
+          if (r[1] >= band.bottom) continue;
+          lo = Math.max(lo, band.left - r[0]);
+          hi = Math.min(hi, band.right - r[2]);
+        }
+      }
+      return lo <= hi ? [lo, hi] : null;
+    };
+    const fits = (list) => (free.sheet ? fitsX(all(list)) && fitsY(all(list)) : !!range(list));
     // What to frame: the subject with the room, else the subject, else its
     // main object, whichever fits first; failing all, the subject.
     const R = boxPx(this.view.room);
-    const fits = (r) => (free.sheet ? fitsX(r) && fitsY(r) : fitsX(r));
-    let F = R;
-    if (S) F = [union(S, R), S, S1].find((r) => r && fits(r)) || S;
+    let L = [R];
+    if (parts.length) L = [[...parts, R], parts, main].find((l) => l.length && fits(l)) || parts;
+    const F = all(L);
     // px to move the picture by (right, down)
     let dx = 0, dy = 0;
     if (free.sheet) {
       dy = fitsY(F) ? (free.top + free.bottom) / 2 - (F[1] + F[3]) / 2 : free.top - F[1];
       if (fitsX(F)) dx = F[0] < free.left ? free.left - F[0] : F[2] > free.right ? free.right - F[2] : 0;
     } else {
+      // centred in the free space, or as near as the top strip allows
       dx = (free.left + free.right) / 2 - (F[0] + F[2]) / 2;
+      const rg = range(L);
+      if (rg) dx = clamp(dx, rg[0], rg[1]);
     }
     // Not so far that the uncovered part of the screen shows past the ends of
     // the built world (as the player's pan; see _panLimits).
@@ -693,6 +735,7 @@ export class Stage {
     // A little parallax sway with the mouse makes the diorama feel physical.
     if (this.mouse && !G.reducedMotion) c.swayT = (this.mouse.x - 0.5) * 0.06;
     c.sway = lerp(c.sway, c.swayT, 1 - Math.exp(-dt * 2));
+    c.sky = lerp(c.sky, c.skyT, 1 - Math.exp(-dt * 2.5));
 
     const v = this.view;
     const el = this._axes();

@@ -65,9 +65,13 @@ body.panel-open #tools { right: calc(var(--panel-w) + 18px); }
   display: flex; align-items: flex-end; gap: 18px; pointer-events: none; transition: opacity 0.6s, right 0.5s;
 }
 body.panel-open #bottom { right: var(--panel-w); }
-/* Too narrow beside an open panel: let the timeline step aside rather than collapse. */
+/* Too narrow beside an open panel: let the timeline step aside rather than
+   collapse, and the date card too (the panel heads itself with the date), so
+   the sound and help buttons don't land on it and the view's top left is
+   free for what the panel is about (the moon, a tower). */
 @media (max-width: 1100px) and (min-width: 721px) {
   body.panel-open #timeline { visibility: hidden; }
+  body.panel-open #hud { opacity: 0; }
 }
 #timeline {
   pointer-events: auto; flex: 1; max-width: 760px; display: flex; align-items: center; gap: 12px;
