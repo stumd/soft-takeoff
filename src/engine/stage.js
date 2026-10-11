@@ -95,6 +95,20 @@ const DEG = Math.PI / 180;
 // there, and the city climbing its hill spreads up the extra height.
 export const VIEW_DEFAULT = { az: 16 * DEG, el: 18.5 * DEG, elTall: 27 * DEG, frustum: 25, fitW: 25.6 };
 export const VIEW = { ...VIEW_DEFAULT };
+
+// How far the built world reaches along the street, in screen-x (sx, see
+// terrain.js), on each tier. Past these the street runs out of houses and
+// garden walls, and the far bank, city and far district end in cut edges, so
+// the player's pan and zoom-out keep the frame inside them. Read from:
+//   lite: garden walls across the street from x -24 (sx -25.8) to past x 34
+//         (sx 29.9), neighbours to sx -27.3 / 42 (surrounds.js); city rows
+//         sx -32..40 (city.js SX0/SX1)
+//   full: city rows sx -44..52; everything else runs further
+// Keep in step with those files if their extents change.
+const WORLD_SX = QUALITY.lite ? [-24, 30] : [-44, 52];
+// Zoom range for the player (wheel, pinch). Zooming out stops earlier where
+// the frame would otherwise be wider than the built world (lite, wide screens).
+const ZOOM_MIN = 0.75, ZOOM_MAX = 2.6;
 {
   const q = new URLSearchParams(location.search);
   const dev = !!(import.meta.env && import.meta.env.DEV) || q.has('debug');
@@ -148,11 +162,15 @@ export class Stage {
       roomLeft: new THREE.Vector3(-8.6, 0, 0.3),
       roomTop: new THREE.Vector3(-4.2, 2.9, -6.6),
       roomBottom: new THREE.Vector3(-4.2, 0, 0.8),
+      // The whole cut-away room, for framing it beside an open panel.
+      room: new THREE.Box3(new THREE.Vector3(-8.6, 0, -6.6), new THREE.Vector3(0.3, 2.9, 0.8)),
     };
     // Screen space (CSS px) taken by the bar along the bottom; the street sits
     // just above it. The game keeps this up to date; it eases, so the camera
     // glides when the bar comes and goes (title, kettle, ending).
-    this.inset = { bottom: 0, bottomT: 0, init: false };
+    // `drop` (0..1) lets wide screens sit the street a little under the bar's
+    // edge (see _streetShare); not over subtitles.
+    this.inset = { bottom: 0, bottomT: 0, drop: 1, dropT: 1, init: false };
     // Things the player (or the story) can nudge.
     this.cam = {
       zoom: 1, zoomT: 1,
@@ -171,6 +189,9 @@ export class Stage {
     this.applyEnv();
 
     this.onTick = [];
+    // Run after the camera has moved for the frame (screen-space overlays
+    // such as the hotspot markers), so they never trail it by a frame.
+    this.onPost = [];
     this.clock = new THREE.Clock();
     // ?fast lets slow (headless) renderers keep real time, for testing.
     this.maxDt = new URLSearchParams(location.search).has('fast') ? 1 : 0.05;
@@ -312,7 +333,7 @@ export class Stage {
   _bindControls(el) {
     let drag = null;
     const pointers = new Map();
-    let pinch0 = 0, zoom0 = 1;
+    let pinch0 = 0, zoom0 = 1, mid = null;
     el.addEventListener('pointerdown', (e) => {
       pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pointers.size === 1) {
@@ -321,6 +342,7 @@ export class Stage {
         const [a, b] = [...pointers.values()];
         pinch0 = Math.hypot(a.x - b.x, a.y - b.y);
         zoom0 = this.cam.zoomT;
+        mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
         drag = null;
       }
     });
@@ -330,7 +352,16 @@ export class Stage {
       if (pointers.size === 2) {
         const [a, b] = [...pointers.values()];
         const d = Math.hypot(a.x - b.x, a.y - b.y);
-        if (pinch0 > 0) this.cam.zoomT = clamp(zoom0 * (d / pinch0), 0.75, 2.6);
+        const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (pinch0 > 0 && mid && !this.locked) {
+          // The two fingers also drag the view along with them...
+          const upp = this.frustumH(this.cam.zoomT) / this.height;
+          this.cam.panXT -= (m.x - mid.x) * upp;
+          this.cam.panYT += (m.y - mid.y) * upp;
+          // ...and the zoom closes on (or opens from) the point between them.
+          this.zoomAbout(zoom0 * (d / pinch0), m.x, m.y);
+        }
+        mid = m;
         return;
       }
       if (!drag || this.locked) return;
@@ -338,13 +369,21 @@ export class Stage {
       drag.moved = Math.max(drag.moved, Math.hypot(dx, dy));
       if (drag.moved < 4) return;
       const unitsPerPx = this.frustumH() / this.height;
-      this.cam.panXT = clamp(drag.px - dx * unitsPerPx, -16, 16);
-      this.cam.panYT = clamp(drag.py + dy * unitsPerPx, -10, 12);
+      const px = drag.px - dx * unitsPerPx, py = drag.py + dy * unitsPerPx;
+      const lim = this._panLimits(this.cam.zoomT);
+      this.cam.panXT = clamp(px, lim[0], lim[1]);
+      this.cam.panYT = clamp(py, lim[2], lim[3]);
+      // Past a limit, start again from it, so dragging back moves at once.
+      if (this.cam.panXT !== px) { drag.px = this.cam.panXT; drag.x = e.clientX; }
+      if (this.cam.panYT !== py) { drag.py = this.cam.panYT; drag.y = e.clientY; }
       this.dragging = true;
     });
     const up = (e) => {
       pointers.delete(e.pointerId);
-      if (pointers.size < 2) pinch0 = 0;
+      if (pointers.size < 2) {
+        pinch0 = 0;
+        mid = null;
+      }
       if (pointers.size === 0) {
         drag = null;
         setTimeout(() => (this.dragging = false), 0);
@@ -355,7 +394,7 @@ export class Stage {
     el.addEventListener('wheel', (e) => {
       if (this.locked) return;
       e.preventDefault();
-      this.cam.zoomT = clamp(this.cam.zoomT * Math.exp(-e.deltaY * 0.0012), 0.75, 2.6);
+      this.zoomAbout(this.cam.zoomT * Math.exp(-e.deltaY * 0.0012), e.clientX, e.clientY);
     }, { passive: false });
     el.addEventListener('dblclick', () => this.resetView());
   }
@@ -366,6 +405,33 @@ export class Stage {
     this.cam.panYT = 0;
   }
 
+  // The smallest zoom the player can reach: the frame never gets wider than
+  // the built world (with a little to spare), and zoom 1 is always allowed.
+  minZoom() {
+    const fw1 = this.frustumH(1) * (this.width / this.height);
+    return clamp(fw1 / (WORLD_SX[1] - WORLD_SX[0] - 1), ZOOM_MIN, 1);
+  }
+
+  // Zoom to z, keeping whatever is under the screen point (x, y) (CSS px:
+  // the cursor, or the middle of a pinch) where it is. Works on the targets,
+  // which the camera then eases to.
+  zoomAbout(z, x, y) {
+    const c = this.cam;
+    const z0 = c.zoomT;
+    const z1 = clamp(z, this.minZoom(), ZOOM_MAX);
+    if (Math.abs(z1 - z0) < 1e-6) return;
+    const W = this.width, H = this.height;
+    const fh0 = this.frustumH(z0), fh1 = this.frustumH(z1);
+    const d = (fh0 - fh1) / H; // change in world units per px
+    // The point under (x, y) sits at
+    //   frame centre + (px from the centre) * units per px,
+    // where the centre itself moves with the zoom (frameCentreY's pivot,
+    // and the panel shifts, which are shares of the frame).
+    c.panXT += (x - W / 2) * d + c.shiftT * (W / H) * (fh0 - fh1);
+    c.panYT += (H / 2 - y) * d + c.shiftYT * (fh0 - fh1) + this.frameCentreY(z0) - this.frameCentreY(z1);
+    c.zoomT = z1;
+  }
+
   // 0 on landscape screens, 1 on tall portrait ones (aspect 0.5 or less).
   tallness() {
     return clamp((1.0 - this.width / this.height) / 0.5, 0, 1);
@@ -373,11 +439,15 @@ export class Stage {
 
   // The height (CSS px) of the bar along the bottom of the screen, which the
   // street sits just above. 0 when nothing is there (title, kettle, ending).
-  setBottomInset(px) {
+  // `under`: the bar is glass the street may run a little way beneath (the
+  // timeline), rather than text it must stay clear of (subtitles).
+  setBottomInset(px, under = true) {
     this.inset.bottomT = px;
+    this.inset.dropT = under ? 1 : 0;
     if (!this.inset.init) {
       this.inset.init = true;
       this.inset.bottom = px;
+      this.inset.drop = this.inset.dropT;
     }
   }
 
@@ -385,8 +455,9 @@ export class Stage {
   // next door still fit across, and the extra height goes to the city and sky.
   frustumBase() {
     const aspect = this.width / this.height;
-    // short screens (landscape phones) give up a little size for some skyline
-    const fr = this.view.frustum + 4 * clamp((540 - this.height) / 180, 0, 1);
+    // Short screens (landscape phones) close in a little, so the house stays
+    // a size you can read and tap; the top of the skyline gives way.
+    const fr = this.view.frustum - 4 * clamp((540 - this.height) / 180, 0, 1);
     return Math.max(fr, this.view.fitW / aspect);
   }
 
@@ -396,8 +467,24 @@ export class Stage {
     return 1 - (1 - this.cam.extraZoom) * (1 - 0.45 * this.tallness());
   }
 
-  frustumH() {
-    return this.frustumBase() / (this.cam.zoom * this.pullback());
+  frustumH(z = this.cam.zoom) {
+    return this.frustumBase() / (z * this.pullback());
+  }
+
+  // The camera's right and up axes (and its direction) for the current
+  // screen and story state. Worked out here, not read from the camera, so
+  // that layout done between frames (a resize, a panel opening) sees the
+  // angle the next frame will use.
+  _axes() {
+    const v = this.view, c = this.cam;
+    const az = v.az + c.sway;
+    // Story pull-backs also rise, so the land beyond the city's hill comes into view.
+    const el = Math.min(32 * DEG, v.el + (1 - c.extraZoom) * 15 * DEG);
+    const se = Math.sin(el), ce = Math.cos(el), sa = Math.sin(az), ca = Math.cos(az);
+    (this._camDir ||= new THREE.Vector3()).set(ce * sa, se, ce * ca);
+    (this._camRight ||= new THREE.Vector3()).set(ca, 0, -sa);
+    (this._camUp ||= new THREE.Vector3()).set(-se * sa, ce, -se * ca);
+    return el;
   }
 
   _rel(p, axis) {
@@ -405,14 +492,20 @@ export class Stage {
   }
 
   // Share of the frame (from the bottom) below the front of the street.
+  // Wide screens sit the world a little lower (about 2.5% of the height):
+  // their frame is short, and tall things across the river (cranes, tower
+  // tips, the Spindle) otherwise run up under the date card and buttons.
+  // Only the far pavement goes under the edge of the timeline's glass.
   _streetShare() {
-    return Math.max(0.03, (this.inset.bottom + 12) / this.height);
+    const h = this.height;
+    const wide = clamp((this.width / h - 1.25) / 0.25, 0, 1) * clamp((h - 540) / 120, 0, 1) * this.inset.drop;
+    return Math.max(0.03, (this.inset.bottom + 12 - 0.025 * h * wide) / h);
   }
 
   // Where the middle of the frame sits above the target: the front of the
   // street sits just above the bottom bar, and the rest of the frame is city
   // and sky. Story pull-backs keep the street where it is and open up the
-  // world above it; the player's own zoom pivots on the middle of the view.
+  // world above it.
   frameOffsetY() {
     const fb = this.frustumBase() / this.pullback();
     const up = (this._camUp ||= new THREE.Vector3(0, 1, 0));
@@ -420,12 +513,13 @@ export class Stage {
     return fb / 2 - drop - this._streetShare() * fb;
   }
 
-  // The same, with the player's zoom: zooming in closes on the house (it
-  // stays where it is on screen), zooming out keeps the street where it is
-  // and opens up the city and sky above, never a field of empty ground below.
-  frameCentreY() {
+  // The same at zoom z, before the player's pan: zooming in from the default
+  // view closes on the house (the target stays where it is on screen),
+  // zooming out keeps the street where it is and opens up the city and sky
+  // above. (The wheel and pinch then add a pan that holds the point under the
+  // cursor or fingers still; see zoomAbout.)
+  frameCentreY(z = this.cam.zoom) {
     const off = this.frameOffsetY();
-    const z = this.cam.zoom;
     const pivot = z < 1 ? this._rel(this.view.street, (this._camUp ||= new THREE.Vector3(0, 1, 0))) : 0;
     return pivot + (off - pivot) / z;
   }
@@ -442,39 +536,136 @@ export class Stage {
     return Math.min(0, left - m + fw / 2);
   }
 
-  // The vertical shift (as a share of the frame) that centres the room in
-  // the strip between the date card (`topPx`) and a bottom sheet covering
-  // `frac` of the screen. If the strip is shorter than the room, the room's
-  // top stays clear of the date card.
-  sheetShift(frac, topPx = 0) {
-    const fh = this.frustumH();
+  // How far the player may pan at zoom z, as [xlo, xhi, ylo, yhi] (world
+  // units on the camera plane), measured on the frame before any panel shift.
+  //  - sideways, the frame stays inside the built world (WORLD_SX);
+  //  - down, no more than a band of ground below the street;
+  //  - up, no higher than the top of the default view (so zoomed in you can
+  //    look up at the skyline, zoomed out you don't get a sky with no world).
+  // Every range includes 0: the default view itself is never pushed.
+  _panLimits(z) {
+    const c = this.cam, v = this.view;
+    const fh = this.frustumH(z), fw = fh * (this.width / this.height);
+    const fb = this.frustumBase() / this.pullback();
+    const tsx = v.target.x * Math.cos(v.az) - v.target.z * Math.sin(v.az);
+    const offX = this.frameOffsetX();
+    const xlo = WORLD_SX[0] + 0.5 - tsx - offX + fw / 2;
+    const xhi = WORLD_SX[1] - 0.5 - tsx - offX - fw / 2;
     const up = (this._camUp ||= new THREE.Vector3(0, 1, 0));
-    const c = this.cam;
-    const sy = c.panY + c.extraPanY + this.frameCentreY();
-    const h = this.height;
-    // screen fractions (from the top) of the room's top and bottom, unshifted
-    const top = 0.5 - (this._rel(this.view.roomTop, up) - sy) / fh;
-    const bot = 0.5 - (this._rel(this.view.roomBottom, up) - sy) / fh;
-    const s0 = (topPx + 8) / h, s1 = 1 - frac - 6 / h;
-    // shift s moves everything down the screen by s (as a share of it)
-    let s = (s0 + s1) / 2 - (top + bot) / 2;
-    if (top + s < s0) s = s0 - top;
-    // (a positive shiftY raises the frame, which moves everything down)
-    return s;
+    const street = this._rel(v.street, up);
+    const cy = c.extraPanY + this.frameCentreY(z);
+    const maxBand = Math.max(this._streetShare() * fb + 0.8, 0.12 * fh);
+    // frame bottom (cy + pan - fh / 2) stays above street - maxBand
+    const ylo = street - maxBand + fh / 2 - cy;
+    // frame top (cy + pan + fh / 2) stays below the default view's top
+    const top1 = c.extraPanY + this.frameCentreY(1) + this.frustumH(1) / 2;
+    const yhi = top1 + 0.04 * fh - (cy + fh / 2);
+    return [Math.min(0, xlo), Math.max(0, xhi), Math.min(0, ylo), Math.max(0, yhi)];
   }
 
-  // Keep the player's pan from wandering off into empty ground below the
-  // street (most of all when zoomed out).
-  _clampPan(fh, sy0) {
+  // Keep zoom and pan inside their limits: the targets for where the camera
+  // is heading, and the eased values for where it is now (so an edge never
+  // shows mid-glide either).
+  _clampPan() {
     const c = this.cam;
-    const up = this._camUp;
-    const street = this._rel(this.view.street, up);
-    const fb = this.frustumBase() / this.pullback();
-    const maxBand = Math.max(this._streetShare() * fb + 0.8, 0.12 * fh);
-    // frame bottom = sy0 + panY - fh / 2 must stay above street - maxBand
-    // (never pushes the default view itself, pan 0, upwards)
-    const lo = Math.min(0, street - maxBand + fh / 2 - sy0);
-    if (c.panYT < lo) c.panYT = lo;
+    const zMin = this.minZoom();
+    if (c.zoomT < zMin) c.zoomT = zMin;
+    let lim = this._panLimits(c.zoomT);
+    c.panXT = clamp(c.panXT, lim[0], lim[1]);
+    c.panYT = clamp(c.panYT, lim[2], lim[3]);
+    lim = this._panLimits(c.zoom);
+    c.panX = clamp(c.panX, lim[0], lim[1]);
+    c.panY = clamp(c.panY, lim[2], lim[3]);
+  }
+
+  // The shifts (as cam.shiftT and cam.shiftYT take them: shares of the frame)
+  // that bring a hotspot's subject into the part of the screen an open panel
+  // leaves free.
+  //   focus: { boxes: [Box3], points: [Vector3] } in world space: the
+  //          subject's objects and its marker. With nothing in it (or only
+  //          things in the sky, which stays put on screen) the room is framed.
+  //   free:  { left, right, top, bottom } in CSS px; `sheet` for the phone's
+  //          bottom sheet (centre up/down, sideways only to bring it fully on
+  //          screen), else a side panel (centre sideways).
+  // The room comes too whenever it fits beside the subject. A subject too big
+  // for the space keeps its top clear of the date card (sheet) or its middle
+  // in the middle (side panel). Worked out on the frame before any shift,
+  // with the player's zoom and pan.
+  panelShift(focus, free) {
+    // Measured where the camera is heading: the bottom bar's height eases.
+    const { bottom, drop } = this.inset;
+    this.inset.bottom = this.inset.bottomT;
+    this.inset.drop = this.inset.dropT;
+    try {
+      return this._panelShift(focus, free);
+    } finally {
+      this.inset.bottom = bottom;
+      this.inset.drop = drop;
+    }
+  }
+
+  _panelShift(focus, free) {
+    this._axes();
+    const c = this.cam, W = this.width, H = this.height;
+    const fh = this.frustumH(c.zoomT), fw = fh * (W / H);
+    const cx = c.panXT + this.frameOffsetX();
+    const cy = c.panYT + c.extraPanY + this.frameCentreY(c.zoomT);
+    const right = this._camRight, up = this._camUp;
+    const px = (p) => [(0.5 + (this._rel(p, right) - cx) / fw) * W, (0.5 - (this._rel(p, up) - cy) / fh) * H];
+    const corner = (this._corner ||= new THREE.Vector3());
+    const boxPx = (b) => {
+      const r = [Infinity, Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < 8; i++) {
+        corner.set(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z);
+        const [x, y] = px(corner);
+        r[0] = Math.min(r[0], x); r[1] = Math.min(r[1], y);
+        r[2] = Math.max(r[2], x); r[3] = Math.max(r[3], y);
+      }
+      return r;
+    };
+    const union = (a, b) => (!a ? b : !b ? a : [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])]);
+    const fitsX = (r) => r[2] - r[0] <= free.right - free.left;
+    const fitsY = (r) => r[3] - r[1] <= free.bottom - free.top;
+    // The subject: what of it is on screen now. Something cut by a side of
+    // the screen is taken whole if it would fit; very wide things (the street,
+    // a skyline) only for the part in view.
+    let S = null, S1 = null;
+    for (const b of (focus && focus.boxes) || []) {
+      const r = boxPx(b);
+      const vy0 = Math.max(0, r[1]), vy1 = Math.min(H, r[3]);
+      const vx0 = Math.max(0, r[0]), vx1 = Math.min(W, r[2]);
+      if (vy1 <= vy0 || vx1 <= vx0) continue;
+      const whole = fitsX(r);
+      const v = [whole ? r[0] : vx0, vy0, whole ? r[2] : vx1, vy1];
+      S = union(S, v);
+      // (the first object is the main one: the marker stands on it)
+      if (b === focus.boxes[0]) S1 = v;
+    }
+    for (const p of (focus && focus.points) || []) {
+      const [x, y] = px(p);
+      if (x > 0 && x < W && y > 0 && y < H) {
+        const m = [x - 14, y - 14, x + 14, y + 14];
+        S = union(S, m);
+        S1 = union(S1, m);
+      }
+    }
+    // What to frame: the subject with the room, else the subject, else its
+    // main object, whichever fits first; failing all, the subject.
+    const R = boxPx(this.view.room);
+    const fits = (r) => (free.sheet ? fitsX(r) && fitsY(r) : fitsX(r));
+    let F = R;
+    if (S) F = [union(S, R), S, S1].find((r) => r && fits(r)) || S;
+    // px to move the picture by (right, down)
+    let dx = 0, dy = 0;
+    if (free.sheet) {
+      dy = fitsY(F) ? (free.top + free.bottom) / 2 - (F[1] + F[3]) / 2 : free.top - F[1];
+      if (fitsX(F)) dx = F[0] < free.left ? free.left - F[0] : F[2] > free.right ? free.right - F[2] : 0;
+    } else {
+      dx = (free.left + free.right) / 2 - (F[0] + F[2]) / 2;
+    }
+    // (a positive shift slides the frame right, so the picture moves left;
+    // a positive shiftY raises the frame, so the picture moves down)
+    return { x: -dx / W, y: dy / H };
   }
 
   _updateCamera(dt) {
@@ -486,29 +677,27 @@ export class Stage {
     c.shift = lerp(c.shift, c.shiftT, 1 - Math.exp(-dt * 4));
     c.shiftY = lerp(c.shiftY, c.shiftYT, 1 - Math.exp(-dt * 4));
     this.inset.bottom = lerp(this.inset.bottom, this.inset.bottomT, 1 - Math.exp(-dt * 2.5));
+    this.inset.drop = lerp(this.inset.drop, this.inset.dropT, 1 - Math.exp(-dt * 2.5));
     // A little parallax sway with the mouse makes the diorama feel physical.
     if (this.mouse && !G.reducedMotion) c.swayT = (this.mouse.x - 0.5) * 0.06;
     c.sway = lerp(c.sway, c.swayT, 1 - Math.exp(-dt * 2));
 
     const v = this.view;
-    const az = v.az + c.sway;
-    // Story pull-backs also rise, so the land beyond the city's hill comes into view.
-    const el = Math.min(32 * DEG, v.el + (1 - c.extraZoom) * 15 * DEG);
-    const dir = (this._camDir ||= new THREE.Vector3()).set(Math.cos(el) * Math.sin(az), Math.sin(el), Math.cos(el) * Math.cos(az));
+    const el = this._axes();
     const cam = this.camera;
-    cam.position.copy(v.target).addScaledVector(dir, v.dist);
+    cam.position.copy(v.target).addScaledVector(this._camDir, v.dist);
     cam.lookAt(v.target);
     cam.updateMatrixWorld();
-    (this._camUp ||= new THREE.Vector3()).set(0, 1, 0).applyQuaternion(cam.quaternion);
-    (this._camRight ||= new THREE.Vector3()).set(1, 0, 0).applyQuaternion(cam.quaternion);
 
     const aspect = this.width / this.height;
+    // Pan limits are measured on the frame before the panel shifts, so an open
+    // panel neither resets the player's pan nor takes away the room to pan.
+    this._clampPan();
     const fh = this.frustumH();
     const fw = fh * aspect;
-    const sy0 = c.extraPanY + c.shiftY * fh + this.frameCentreY();
-    this._clampPan(fh, sy0);
+    const sy0 = c.extraPanY + this.frameCentreY();
     const sx = c.panX + c.shift * fw + this.frameOffsetX();
-    const sy = c.panY + sy0;
+    const sy = c.panY + sy0 + c.shiftY * fh;
     cam.left = -fw / 2 + sx;
     cam.right = fw / 2 + sx;
     cam.top = fh / 2 + sy;
@@ -642,6 +831,7 @@ export class Stage {
       for (const f of this.onTick) f(dt, G.time);
       this._updateCamera(dt);
       if (this.onLate) this.onLate(dt);
+      for (const f of this.onPost) f(dt, G.time);
       const r = this.renderer;
       if (r.shadowMap.enabled && !r.shadowMap.autoUpdate && this._frame++ % 3 === 0) r.shadowMap.needsUpdate = true;
       if (!this.hold && !this.contextLost) {

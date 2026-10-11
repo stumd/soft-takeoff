@@ -62,6 +62,8 @@ export class Game {
     this._bind();
     this._buildTimeline();
     stage.onTick.push((dt, t) => this._frame(dt, t));
+    // Markers go where the camera is this frame, after it has moved.
+    if (stage.onPost) stage.onPost.push(() => this._placeMarkers());
     stage.onContextLost = () => this._contextLost();
     stage.onContextRestored = () => this._contextRestored();
     // The browser refused to give the context back: no point waiting.
@@ -115,6 +117,15 @@ export class Game {
         this.onAdvance();
       }
     });
+    // A new screen size (or a phone turned round): measure the bars again,
+    // every frame for a moment while the layout settles. (An open panel is
+    // reframed from _frame, which notices the new size.)
+    const resized = () => {
+      this._insetFresh = 30;
+      this._kettleInsetPx = 0;
+    };
+    window.addEventListener('resize', resized);
+    window.addEventListener('orientationchange', resized);
     if (this.saved && this.saved.index > 0) {
       const b = $('btn-continue');
       b.classList.remove('hidden');
@@ -653,7 +664,7 @@ export class Game {
       b.onclick = () => this.enterChoose();
       foot.appendChild(b);
     }
-    this._openPanel();
+    this._openPanel(h);
     const seen = this._seenSet();
     if (!seen.includes(h.id)) seen.push(h.id);
     const m = this.markers.get(h.id);
@@ -662,7 +673,7 @@ export class Game {
     this._persist();
   }
 
-  _openPanel() {
+  _openPanel(h) {
     const p = $('panel');
     p.classList.add('open');
     p.setAttribute('aria-hidden', 'false');
@@ -670,15 +681,55 @@ export class Game {
     p.scrollTop = 0;
     document.body.classList.add('panel-open');
     this.panelOpen = true;
-    const mobile = window.innerWidth <= 720;
-    this.stage.cam.shiftT = mobile ? 0 : p.offsetWidth / (2 * window.innerWidth);
-    // On phones the sheet covers the lower part of the screen: lift the house
-    // into the strip between it and the date card.
-    if (mobile && this.stage.sheetShift) {
-      const card = $('hud').classList.contains('hidden') ? null : $('hud').getBoundingClientRect();
-      this.stage.cam.shiftYT = this.stage.sheetShift(p.offsetHeight / window.innerHeight, card ? card.bottom : 0);
-    } else this.stage.cam.shiftYT = mobile ? -0.28 : 0;
+    this._panelFor = h || null;
+    this._layoutPanelShift();
     setTimeout(() => $('panel-close').focus({ preventScroll: true }), 50);
+  }
+
+  // Slide the view so that what the open panel is about stays in sight: beside
+  // the side panel, or in the strip between the date card and a phone's
+  // bottom sheet. Again whenever the screen changes size or turns round (a
+  // phone's sheet becomes a side panel and back).
+  _layoutPanelShift() {
+    const cam = this.stage.cam;
+    if (!this.panelOpen) return;
+    this._panelKey = window.innerWidth + 'x' + window.innerHeight;
+    this._panelInset = this.stage.inset ? this.stage.inset.bottomT : 0;
+    if (!this.stage.panelShift) {
+      cam.shiftT = cam.shiftYT = 0;
+      return;
+    }
+    const p = $('panel');
+    const W = window.innerWidth, H = window.innerHeight;
+    const hud = $('hud');
+    const card = hud.classList.contains('hidden') ? null : hud.getBoundingClientRect();
+    const top = (card ? card.bottom : 0) + 8;
+    const free = W <= 720
+      ? { sheet: true, left: 16, right: W - 16, top, bottom: H - p.offsetHeight - 6 }
+      : { left: 16, right: W - p.offsetWidth - 16, top, bottom: H - 8 };
+    const s = this.stage.panelShift(this._focusOf(this._panelFor), free);
+    cam.shiftT = s.x;
+    cam.shiftYT = s.y;
+  }
+
+  // What an open panel is about, for the camera to frame: the world boxes of
+  // the hotspot's objects and its marker. Things in the sky layer are left
+  // out (it stays put on screen whatever the camera does); with nothing left,
+  // the stage frames the room.
+  _focusOf(h) {
+    const w = this.world;
+    const out = { boxes: [], points: [] };
+    if (!h || !w._targets) return out;
+    for (const e of w._targets(h)) {
+      if (!e.obj.visible || (w.sky && e.obj.parent === w.sky)) continue;
+      const b = new THREE.Box3().setFromObject(e.obj);
+      if (!b.isEmpty()) out.boxes.push(b);
+    }
+    if (out.boxes.length) {
+      const m = w.markerPos(h, new THREE.Vector3());
+      if (m) out.points.push(m);
+    }
+    return out;
   }
 
   closePanel() {
@@ -689,6 +740,7 @@ export class Game {
     p.inert = true;
     document.body.classList.remove('panel-open');
     this.panelOpen = false;
+    this._panelFor = null;
     this.stage.cam.shiftT = 0;
     this.stage.cam.shiftYT = 0;
   }
@@ -813,7 +865,7 @@ export class Game {
     audio.setArpRate(3);
     const start = parseDate(this.scene.date).getTime();
     const sub = $('subtitle');
-    sub.className = '';
+    sub.className = 'subtitle';
     sub.innerHTML = '';
 
     // Camera slowly pulls back to take in the world.
@@ -875,7 +927,7 @@ export class Game {
     // Every light in the city, once.
     tween({ dur: 2.6, ease: Ease.sine, update: (k) => (G.pulse = Math.sin(k * Math.PI) * 1.4) }).then(() => (G.pulse = 0));
     const pip = world.get('pip');
-    sub.className = 'pip';
+    sub.className = 'subtitle pip';
     for (const l of PIP_QUESTION) {
       pip?.obj.userData.speak?.(1);
       audio.pipChime();
@@ -964,7 +1016,7 @@ export class Game {
     no.onclick = () => this.closePanel();
     foot.append(yes, no);
     audio.pipChime();
-    this._openPanel();
+    this._openPanel(h);
   }
 
   async ending() {
@@ -1027,11 +1079,13 @@ export class Game {
     if (!this.stage.setBottomInset) return;
     const bar = $('bottom');
     if (this.state === 'kettle') {
-      this.stage.setBottomInset(window.innerWidth <= 720 ? 132 : 150);
+      this.stage.setBottomInset(this._kettleInset(), false);
       return;
     }
     const none = this.state === 'title' || this.state === 'ending';
-    if (!none && !bar.classList.contains('hidden') && (this._insetN = (this._insetN || 0) + 1) % 20 === 1) {
+    const fresh = this._insetFresh > 0;
+    if (fresh) this._insetFresh--;
+    if (!none && !bar.classList.contains('hidden') && ((this._insetN = (this._insetN || 0) + 1) % 20 === 1 || fresh)) {
       // (the timeline's top: on wide screens the button column beside it is
       // taller, but it stands where the street has already dropped away)
       this._barH = Math.max(0, window.innerHeight - $('timeline').getBoundingClientRect().top);
@@ -1040,11 +1094,54 @@ export class Game {
     this.stage.setBottomInset(none ? 0 : this._barH || est);
   }
 
+  // The street's inset during the kettle: just above the subtitles. Measured
+  // once per screen size from the tallest line the sequence will show (so the
+  // camera doesn't bob as one- and two-line subtitles come and go), using a
+  // hidden copy of the subtitle box.
+  _kettleInset() {
+    if (this._kettleInsetPx) return this._kettleInsetPx;
+    const sub = $('subtitle');
+    const probe = document.createElement('div');
+    probe.className = 'subtitle';
+    probe.setAttribute('aria-hidden', 'true');
+    probe.style.visibility = 'hidden';
+    sub.parentNode.appendChild(probe);
+    let top = window.innerHeight;
+    const lines = [
+      ...KETTLE_SCRIPT.map((l) => ['Riverside · Nadia Okoye', l.text]),
+      ...PIP_QUESTION.map((l) => ['Pip', l]),
+    ];
+    for (const [src, text] of lines) {
+      probe.innerHTML = `<span class="src">${src}</span><span class="s">${inline(text)}</span>`;
+      top = Math.min(top, probe.getBoundingClientRect().top);
+    }
+    probe.remove();
+    // the street goes 12px above the inset (stage._streetShare)
+    this._kettleInsetPx = Math.max(window.innerWidth <= 720 ? 132 : 150, window.innerHeight - top + 4);
+    return this._kettleInsetPx;
+  }
+
   _frame() {
-    if (!QUALITY.text) this._syncInset();
+    if (QUALITY.text) return;
+    this._syncInset();
+    // An open panel whose screen changed size (or turned round, so a phone's
+    // sheet became a side panel), or whose bottom bar was measured anew (the
+    // street's height on screen depends on it): reframe.
+    if (this.panelOpen) {
+      const key = window.innerWidth + 'x' + window.innerHeight;
+      const ins = this.stage.inset ? this.stage.inset.bottomT : 0;
+      if (key !== this._panelKey || Math.abs(ins - this._panelInset) > 3) this._layoutPanelShift();
+    }
+  }
+
+  // Each frame, after the camera has moved: put the markers on their things.
+  _placeMarkers() {
     if (!this.scene || this.state === 'title' || QUALITY.text) return;
     const hideAll = this.busy || this.state === 'kettle' || this.state === 'ending';
-    const panelLeft = this.panelOpen && window.innerWidth > 720 ? window.innerWidth - $('panel').offsetWidth : Infinity;
+    const W = window.innerWidth, H = window.innerHeight;
+    const panelLeft = this.panelOpen && W > 720 ? W - $('panel').offsetWidth : Infinity;
+    const shown = (this._shown ||= []);
+    shown.length = 0;
     for (const h of this.scene.hotspots) {
       const m = this.markers.get(h.id);
       if (!m) continue;
@@ -1054,9 +1151,49 @@ export class Game {
         continue;
       }
       const p = this.stage.toScreen(pos, this._p);
-      const off = !p.visible || p.x < 8 || p.y < 8 || p.x > window.innerWidth - 8 || p.y > window.innerHeight - 8 || p.x > panelLeft - 10;
+      // A marker that floats just above the top of the screen (tall things
+      // on short screens) comes down onto what it marks instead.
+      if (p.y < 16 && p.y > -60) p.y = 16;
+      const off = !p.visible || p.x < 8 || p.y < 8 || p.x > W - 8 || p.y > H - 8 || p.x > panelLeft - 10;
       m.classList.toggle('offscreen', off);
-      m.style.transform = `translate(${p.x}px, ${p.y}px)`;
+      // (seen markers are hidden, so they don't take up room)
+      if (!off) shown.push({ m, x: p.x, y: p.y, x0: p.x, y0: p.y, live: !m.classList.contains('seen') || m.classList.contains('show-seen') });
+      else m.style.transform = `translate(${p.x}px, ${p.y}px)`;
+    }
+    this._spreadMarkers(shown);
+    for (const s of shown) {
+      const x = clamp(s.x, 14, W - 14), y = clamp(s.y, 14, H - 14);
+      s.m.style.transform = `translate(${x.toFixed(1)}px, ${y.toFixed(1)}px)`;
+    }
+  }
+
+  // Markers closer than a fingertip (28px) are pushed apart along the line
+  // between them, each by at most 14px from its own spot, so that each can
+  // still be tapped (people round the kitchen table, the kettle by Pip).
+  _spreadMarkers(list) {
+    const MIN = 28, CAP = 14;
+    const live = list.filter((s) => s.live);
+    for (let pass = 0; pass < 3; pass++) {
+      let moved = false;
+      for (let i = 0; i < live.length; i++) {
+        for (let j = i + 1; j < live.length; j++) {
+          const a = live[i], b = live[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          let d = Math.hypot(dx, dy);
+          if (d >= MIN) continue;
+          // the same spot: split them sideways, in list order
+          if (d < 0.01) { dx = 1; dy = 0; d = 1; }
+          const k = (MIN - d) / 2 / d;
+          a.x -= dx * k; a.y -= dy * k;
+          b.x += dx * k; b.y += dy * k;
+          moved = true;
+        }
+      }
+      for (const s of live) {
+        const ox = s.x - s.x0, oy = s.y - s.y0, o = Math.hypot(ox, oy);
+        if (o > CAP) { s.x = s.x0 + (ox * CAP) / o; s.y = s.y0 + (oy * CAP) / o; }
+      }
+      if (!moved) break;
     }
   }
 }
