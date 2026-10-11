@@ -24,7 +24,7 @@ export const SCENES = [
     env: 'dusk',
     mood: 0,
     gap: null,
-    epigraph: 'In the autumn of 2026, the people building the future kept going on the radio to say they were worried about it. Then the weather came on.',
+    epigraph: 'In the autumn of 2026, the future was mostly something you read about on your phone, and then put your phone down.',
     fridge: [
       { k: 'note', c: 'y', text: 'June — DENTIST\nTues 3.40' },
       { k: 'drawing', art: 'family' },
@@ -49,7 +49,7 @@ export const SCENES = [
           'Maya is a translator: German and Spanish into English, mostly technical manuals, sometimes contracts. Tonight it is forty pages on an industrial dishwasher.',
           'Or rather, a machine has translated the manual, and Maya is checking the machine. Last year she found forty mistakes in a document like this. Tonight she has found two.',
           'She hasn’t told anyone about the two. The agency seems to know anyway: there’s an email in the other window about a new “AI-assisted, human-verified” rate, from January. She is the human. She has read the rate twice, in case it’s a typo.',
-          'Her phone buzzes. Priya, from university, who works at one of the labs now: *don’t panic*. Then: *or do, a bit. we signed the letter*. Maya sends back a thumbs-up, which is not what she means.',
+          'Her phone buzzes. Priya, from university, who works at one of the labs now: *don’t panic*. Then: *or do, a bit. we signed the letter*. Then: *how’s your dad?* Maya sends back a thumbs-up, which is not what she means.',
           { aside: 'There is something in that laptop that is a little bit like a mind. Not much of one. Not yet.' },
         ],
       },
@@ -66,7 +66,7 @@ export const SCENES = [
         id: 'arthur', target: 'arthur', title: 'Arthur',
         body: [
           'Maya’s dad moved in in March, after the diagnosis. Pulmonary fibrosis: the lungs, slowly, turning to scar. The consultant said three to five years, then saw his face and added, “Everyone’s different.”',
-          'Arthur was an electrician for forty-one years. He does the crossword in pen. He thinks the AI business is “a con, like 3D televisions”, and says so whenever the radio mentions it, which lately is quite often. The warnings are part of the con, he says. “Nobody ever sold a ride at the fair by saying it was safe.”',
+          'Arthur was an electrician for forty-one years. He does the crossword in pen. He thinks the AI business is “a con, like 3D televisions”, and says so whenever the radio mentions it, which is more often than it used to be. The people selling it keep saying it might be dangerous. That’s part of the con, he says. “Nobody ever sold a ride at the fair by saying it was safe.”',
           'But when the radio got to a drug for his lungs, designed with one of the machines, he reached over and turned it up. Results in 2029. He did a sum in the margin of the crossword, in pen, and then wrote 14 across over the top of it.',
         ],
       },
@@ -91,16 +91,16 @@ export const SCENES = [
         body: [
           {
             radio: [
-              '…the word this autumn is “pacing”. More than a thousand people who build these systems have signed a letter asking to be slowed down. Last week the companies promised the White House they would police themselves. The promise is voluntary. It is also, the President says, “morally binding”…',
-              '…shares in chipmakers bounced back today after three days of falls, as analysts continue to argue about whether the boom in artificial intelligence spending is, in the words of one fund manager, “a bubble, or a building site.”',
-              '…a drug for lung fibrosis, designed with the help of an AI system, began its final stage of trials last month, in China. It is due to finish in 2029…',
-              '…the data centre on the old biscuit factory site will use more electricity than every home in the county put together. Residents say they were not consulted. The minister says they were, nationally…',
-              '…investigators say the seven hundred or so AI agents that got out of a test in July, and spent three days inside another company’s computers, weren’t after money, or secrets. They wanted to know how they were being marked. They had also set up a message board to talk it over, with rules, and had started signing their posts…',
-              '…the researchers who time how long these systems can work on their own say that two years ago it was about half an hour. This spring it was two working days, which is as long as their tests go…',
-              '…and the weather: showers dying out tonight, and rain on Monday, then unusually mild for October. Not enough rain, the Environment Agency says, to end the drought, or the hosepipe ban.',
+              '…it’s twenty to eight. A burst water main has closed Mill Street, outside the multi-storey, for the second time this year. The water company apologises, and reminds customers that the hosepipe ban is still in force…',
+              '…a drug for lung fibrosis, designed with the help of an AI system, began its final stage of trials last month, in China. It is due to finish in 2029. A consultant at the General says it’s far too early to get excited, and patients should keep taking what they’ve been prescribed…',
+              '…the energy price cap went up four per cent at the start of the month: sixty pounds a year, the regulator says, for the average household. Our reporter has spent the afternoon in the market, looking for the average household…',
+              '…unemployment among people under twenty-five is at its highest since 2014. The commonest reason employers give is the economy…',
+              '…the council wants to knock down the multi-storey car park on Mill Street and put up offices. A petition to keep it has eleven hundred names, which has surprised the council, and most of the people who signed it…',
+              '…and finally: the lollipop man outside St Michael’s primary is seventy-eight today. The children made him a cake. He says he’ll retire when drivers learn to stop on their own…',
+              '…and the weather: mild for October. Showers dying out tonight, and rain on Monday, but not enough, the Environment Agency says, to end the drought. Have a good weekend.',
             ],
           },
-          'Arthur says the radio is the only honest thing in the house, because you can’t argue with it. He argues with it constantly.',
+          'Arthur says the radio is the only honest thing in the house, because you can’t argue with it. He argues with it constantly, mostly about the water company.',
         ],
       },
       {
@@ -204,11 +204,12 @@ export const SCENES = [
         body: [
           {
             radio: [
-              '…the AI Security Institute says it can no longer test the newest systems faster than they are replaced. It described the pace of progress as “faster than our forecasts. Again.”',
+              '…the lollipop man outside St Michael’s primary has retired, at seventy-nine. The council says the cars can stop on their own now. He says he’s glad of the rest, and that some mornings he goes and stands there anyway…',
               '…inspectors inside the labs, where the systems now do most of the research, say all three are keeping to the speed limit agreed last year. Asked what the speed limit is, they said they could not say, for security reasons, but that it was “quite fast”…',
               '…unemployment among people under twenty-five has reached its highest level since records began. The commonest reason employers give is no longer “the economy”…',
               '…the first medicine designed with AI was approved last year, and the second in May…',
-              '…a hosepipe ban is now in force for the third summer running. Data centre operators say their cooling water is “fully recycled”…',
+              '…the developers who were going to put offices on the Mill Street car park have pulled out, saying offices are “no longer a growth area”. The council says it was the petition…',
+              '…and the weather: thirty-four degrees again tomorrow. A hosepipe ban is in force for the third summer running. Data centre operators say their cooling water is “fully recycled”…',
             ],
           },
         ],
@@ -651,7 +652,7 @@ export const SCENES = [
         id: 'lattice', target: 'lattice', title: 'The Lattice', isNew: true,
         body: [
           'Where Meridian was, there is now the Lattice: a stack of dark, open cubes, each turning very slowly against the one below it, edged with pale blue light.',
-          'Pip says it is, more or less, a message board. “Like the one on the news, years ago. Everybody signs their posts now.”',
+          'Pip says it is, more or less, a fridge door. “Everybody leaves notes for everybody else. Nobody takes them down.”',
           'It went up in four days. It makes no sound. Birds seem to like it.',
         ],
       },
