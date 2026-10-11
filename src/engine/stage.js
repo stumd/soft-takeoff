@@ -462,9 +462,12 @@ export class Stage {
   }
 
   // Story pull-backs (kettle, ending) open up less on tall screens, whose
-  // frame is already tall.
+  // frame is already tall, and never wider than the built world (lite's is
+  // narrower; very wide screens), whose ends would otherwise show.
   pullback() {
-    return 1 - (1 - this.cam.extraZoom) * (1 - 0.45 * this.tallness());
+    const p = 1 - (1 - this.cam.extraZoom) * (1 - 0.45 * this.tallness());
+    const fw = this.frustumBase() * (this.width / this.height);
+    return Math.max(p, Math.min(1, fw / (WORLD_SX[1] - WORLD_SX[0] - 1)));
   }
 
   frustumH(z = this.cam.zoom) {
@@ -663,6 +666,15 @@ export class Stage {
     } else {
       dx = (free.left + free.right) / 2 - (F[0] + F[2]) / 2;
     }
+    // Not so far that the uncovered part of the screen shows past the ends of
+    // the built world (as the player's pan; see _panLimits).
+    const tsx = this.view.target.x * Math.cos(this.view.az) - this.view.target.z * Math.sin(this.view.az);
+    const ppu = W / fw;
+    const left0 = cx - fw / 2; // world (camera-plane) x at the screen's left edge, unshifted
+    const xr = free.sheet ? W : free.right;
+    const maxDx = (left0 - (WORLD_SX[0] + 0.5 - tsx)) * ppu;
+    const minDx = (left0 + xr / ppu - (WORLD_SX[1] - 0.5 - tsx)) * ppu;
+    dx = clamp(dx, Math.min(0, minDx), Math.max(0, maxDx));
     // (a positive shift slides the frame right, so the picture moves left;
     // a positive shiftY raises the frame, so the picture moves down)
     return { x: -dx / W, y: dy / H };
