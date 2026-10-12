@@ -894,24 +894,100 @@ function billboardTex(lines, bg, fg, graffiti) {
   return textTex('city-bb-' + lines.join('|') + (graffiti ? 'g' : ''), lines, o);
 }
 
+// WHOSE?, sprayed by hand: wobbly strokes rather than a typeface, a soft
+// haze of overspray and speckle, uneven pressure, and paint running down
+// from the low points. Seeded, so a repaint gives the same tag.
+const TAG = [
+  // [advance, strokes (unit box: x right, y down), drips at these points]
+  [0.95, [[[0, 0], [0.2, 1], [0.42, 0.38], [0.64, 1], [0.86, -0.02]]], [[0.2, 1], [0.64, 1]]],
+  [0.78, [[[0, -0.02], [0.02, 1]], [[0.6, 0], [0.58, 1.02]], [[0.01, 0.52], [0.6, 0.48]]], [[0.58, 1.02]]],
+  [0.86, [[[0.4, 0], [0.12, 0.08], [0, 0.45], [0.1, 0.88], [0.38, 1], [0.66, 0.9], [0.76, 0.5], [0.66, 0.1], [0.36, 0.02]]], []],
+  [0.76, [[[0.62, 0.12], [0.44, 0], [0.16, 0.03], [0.04, 0.22], [0.16, 0.42], [0.48, 0.54], [0.64, 0.74], [0.54, 0.95], [0.22, 1.01], [0.02, 0.88]]], [[0.22, 1.01]]],
+  [0.74, [[[0.58, 0.02], [0, 0], [0.02, 1], [0.6, 0.98]], [[0.02, 0.5], [0.46, 0.52]]], [[0.02, 1], [0.6, 0.98]]],
+  [0.6, [[[0.04, 0.22], [0.14, 0.04], [0.38, -0.02], [0.58, 0.12], [0.56, 0.32], [0.32, 0.5], [0.3, 0.74]]], [[0.3, 0.74]]],
+];
+
 function sprayWhose(ctx, w, h) {
+  const r = rng(1971);
+  const H = 92; // letter height in px
+  const total = TAG.reduce((a, [adv]) => a + adv, 0) * H;
   ctx.save();
-  ctx.translate(w * 0.6, h * 0.79);
-  ctx.rotate(-0.07);
-  ctx.font = 'italic 900 112px "Inter", "Arial Black", Arial, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
+  ctx.translate(w * 0.6 - total / 2, h * 0.79 - H / 2);
+  ctx.rotate(-0.06);
+  ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
-  // a soft overspray, then the paint, then a few drips
-  ctx.shadowColor = 'rgba(232, 40, 32, 0.9)';
-  ctx.shadowBlur = 10;
-  ctx.fillStyle = '#e8322a';
-  ctx.fillText('WHOSE?', 0, 0);
-  ctx.shadowBlur = 0;
-  ctx.fillStyle = '#ff4a3a';
-  ctx.fillText('WHOSE?', -2, -2);
-  ctx.fillStyle = '#e8322a';
-  for (const [x, len] of [[-150, 34], [-62, 22], [18, 40], [104, 26], [170, 18]]) ctx.fillRect(x, 40, 5, len);
+  // every stroke as jittered pixel points, letter by letter, each letter a
+  // little off the line and leaning its own way
+  const strokes = [], drips = [];
+  let x0 = 0;
+  for (const [adv, list, ds] of TAG) {
+    const dy = (r() - 0.5) * 10, lean = (r() - 0.5) * 0.12, sc = 0.94 + r() * 0.12;
+    const P = ([u, v]) => [x0 + (u + v * lean) * H * sc + (r() - 0.5) * 5, dy + v * H * sc + (r() - 0.5) * 5];
+    for (const st of list) strokes.push(st.map(P));
+    for (const d of ds) drips.push(P(d));
+    x0 += adv * H;
+  }
+  const trace = (pts) => {
+    ctx.beginPath();
+    ctx.moveTo(pts[0][0], pts[0][1]);
+    for (let i = 1; i < pts.length - 1; i++) {
+      const mx = (pts[i][0] + pts[i + 1][0]) / 2, my = (pts[i][1] + pts[i + 1][1]) / 2;
+      ctx.quadraticCurveTo(pts[i][0], pts[i][1], mx, my);
+    }
+    const last = pts[pts.length - 1];
+    ctx.lineTo(last[0], last[1]);
+  };
+  // 1. overspray: a faint, uneven haze around every stroke
+  ctx.strokeStyle = 'rgba(226, 38, 30, 0.07)';
+  for (let pass = 0; pass < 3; pass++) {
+    for (const st of strokes) {
+      ctx.lineWidth = 18 + r() * 16;
+      trace(st.map(([px, py]) => [px + (r() - 0.5) * 6, py + (r() - 0.5) * 6]));
+      ctx.stroke();
+    }
+  }
+  // 2. speckle: stray droplets along the strokes
+  ctx.fillStyle = 'rgba(214, 36, 28, 0.55)';
+  for (const st of strokes) {
+    for (let i = 0; i < st.length - 1; i++) {
+      for (let k = 0; k < 14; k++) {
+        const t = r(), a = r() * Math.PI * 2, d = 10 + r() * 16;
+        const sz = 1 + r() * 2;
+        ctx.fillRect(st[i][0] + (st[i + 1][0] - st[i][0]) * t + Math.cos(a) * d, st[i][1] + (st[i + 1][1] - st[i][1]) * t + Math.sin(a) * d, sz, sz);
+      }
+    }
+  }
+  // 3. the paint, with uneven pressure: each stroke goes on in short runs,
+  // some heavier (darker, wider) where the can lingered
+  const PAINT = ['#d92b23', '#d92b23', '#cc261f', '#e1342b', '#bf221b'];
+  for (const st of strokes) {
+    for (let i = 0; i < st.length - 1; i++) {
+      ctx.strokeStyle = PAINT[Math.floor(r() * PAINT.length)];
+      ctx.lineWidth = 12 + r() * 6;
+      trace(i > 0 ? [st[i - 1], st[i], st[i + 1]] : [st[i], st[i + 1]]);
+      ctx.stroke();
+    }
+  }
+  // 4. drips, running down and pooling at the end
+  ctx.fillStyle = '#d92b23';
+  for (const [px, py] of drips) {
+    const len = 14 + r() * 34, wd = 3 + r() * 2.5;
+    ctx.beginPath();
+    ctx.moveTo(px - wd / 2, py);
+    ctx.lineTo(px - wd * 0.3, py + len);
+    ctx.lineTo(px + wd * 0.3, py + len);
+    ctx.lineTo(px + wd / 2, py);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(px, py + len, wd * 0.7, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  // the question mark's dot, dabbed
+  const q = strokes[strokes.length - 1];
+  const qe = q[q.length - 1];
+  ctx.beginPath();
+  ctx.arc(qe[0] + 2, qe[1] + H * 0.22, 8, 0, Math.PI * 2);
+  ctx.fill();
   ctx.restore();
 }
 

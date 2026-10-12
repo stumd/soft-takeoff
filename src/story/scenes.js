@@ -96,7 +96,7 @@ export const SCENES = [
               '…the energy price cap went up four per cent at the start of the month: sixty pounds a year, the regulator says, for the average household. Our reporter has spent the afternoon in the market, looking for the average household…',
               '…unemployment among people under twenty-five is at its highest since 2014. The commonest reason employers give is the economy…',
               '…the council wants to knock down the multi-storey car park on Mill Street and put up offices. A petition to keep it has eleven hundred names, which has surprised the council, and most of the people who signed it…',
-              '…and finally: the lollipop man outside St Michael’s primary is seventy-eight today. The children made him a cake. He says he’ll retire when drivers learn to stop on their own…',
+              '…and finally: the lollipop man outside St Michael’s primary is seventy-eight today. The children made him a cake. He says he’ll retire when they stop making him cakes…',
               '…and the weather: mild for October. Showers dying out tonight, and rain on Monday, but not enough, the Environment Agency says, to end the drought. Have a good weekend.',
             ],
           },
@@ -204,7 +204,7 @@ export const SCENES = [
         body: [
           {
             radio: [
-              '…the lollipop man outside St Michael’s primary has retired, at seventy-nine. The council says the cars can stop on their own now. He says he’s glad of the rest, and that some mornings he goes and stands there anyway…',
+              '…the lollipop man outside St Michael’s primary has retired, at seventy-nine. The children made him one last cake. The council says it won’t be replacing him. He says he’s glad of the rest, and that some mornings he goes and stands there anyway…',
               '…inspectors inside the labs, where the systems now do most of the research, say all three are keeping to the speed limit agreed last year. Asked what the speed limit is, they said they could not say, for security reasons, but that it was “quite fast”…',
               '…unemployment among people under twenty-five has reached its highest level since records began. The commonest reason employers give is no longer “the economy”…',
               '…the first medicine designed with AI was approved last year, and the second in May…',
